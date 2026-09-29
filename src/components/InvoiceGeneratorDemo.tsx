@@ -25,7 +25,6 @@ import {
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { UpiPaymentModal } from './UpiPaymentModal';
-import { UpiInvoiceWidget } from './UpiInvoiceWidget';
 
 interface InvoiceGeneratorDemoProps {
   brand: BrandSettings;
@@ -465,6 +464,15 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
                   placeholder="Client Email Address"
                   className="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded text-[var(--muted-foreground)]"
                 />
+                <input
+                  type="text"
+                  value={invoice.clientAddress || ''}
+                  onChange={(e) =>
+                    setInvoice({ ...invoice, clientAddress: e.target.value })
+                  }
+                  placeholder="Client Address (Street, City, State, ZIP, Country)"
+                  className="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded text-xs text-[var(--muted-foreground)]"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -591,18 +599,6 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
                 </table>
               </div>
             </div>
-
-            {/* UPI Payment Widget */}
-            {invoice.bankDetails?.upiId && (
-              <UpiInvoiceWidget
-                upiId={invoice.bankDetails.upiId}
-                payeeName={invoice.businessName || brand.brandName}
-                amount={grandTotal}
-                currency={invoice.currency}
-                invoiceNumber={invoice.invoiceNumber}
-                onOpenUpiModal={() => setUpiModalOpen(true)}
-              />
-            )}
 
             {/* Bank Details Card */}
             <div className="bg-[var(--muted)]/40 border border-[var(--border)] rounded-lg p-4 text-xs space-y-3">

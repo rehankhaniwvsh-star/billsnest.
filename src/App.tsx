@@ -19,7 +19,6 @@ import { AdminAuthModal } from './components/AdminAuthModal';
 import { TermsPrivacyModal } from './components/TermsPrivacyModal';
 import { SplashEntranceAnimation } from './components/SplashEntranceAnimation';
 import { AuthWhiteScreenModal } from './components/AuthWhiteScreenModal';
-import { LiveMarketIntelligenceModal } from './components/LiveMarketIntelligenceModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   saveInvoiceToFirestore,
@@ -94,7 +93,6 @@ function AppContent() {
   const [adminAuthModalOpen, setAdminAuthModalOpen] = useState(false);
   const [termsPrivacyModalOpen, setTermsPrivacyModalOpen] = useState(false);
   const [termsPrivacyTab, setTermsPrivacyTab] = useState<'privacy' | 'terms'>('privacy');
-  const [marketIntelligenceOpen, setMarketIntelligenceOpen] = useState(false);
 
   // Admin authentication state
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -177,8 +175,6 @@ function AppContent() {
         openAuthModal('signup');
       } else if (window.location.hash === '#dashboard') {
         setDashboardOpen(true);
-      } else if (window.location.hash === '#rates' || window.location.hash === '#tax') {
-        setMarketIntelligenceOpen(true);
       }
     };
 
@@ -207,8 +203,6 @@ function AppContent() {
         openAuthModal('signin');
       } else if (path === '/signup') {
         openAuthModal('signup');
-      } else if (path === '/rates' || path === '/tax-intelligence') {
-        setMarketIntelligenceOpen(true);
       } else if (path === '/create' || path === '/studio') {
         setCurrentView('studio');
       } else if (path === '/dashboard') {
@@ -451,7 +445,6 @@ function AppContent() {
         isAdminOpen={cmsAdminOpen}
         isAdminAuthenticated={isAdminAuthenticated}
         onLockAdmin={handleLockAdmin}
-        onOpenMarketIntelligence={() => setMarketIntelligenceOpen(true)}
       />
 
       {currentView === 'studio' ? (
@@ -538,13 +531,6 @@ function AppContent() {
         logoLetter={cms.brand?.logoLetter || 'B'}
       />
 
-      {/* Live Market Rates & Tax Intelligence (Google Search Grounding via Gemini 3.5 Flash) */}
-      <LiveMarketIntelligenceModal
-        isOpen={marketIntelligenceOpen}
-        onClose={() => setMarketIntelligenceOpen(false)}
-        currencySymbol={activeInvoice?.currency || '₹'}
-      />
-
       {/* Terms of Service & Privacy Policy Modal */}
       <TermsPrivacyModal
         isOpen={termsPrivacyModalOpen}
@@ -567,7 +553,6 @@ function AppContent() {
         onDuplicateInvoice={handleDuplicateInvoice}
         onDownloadPdf={handleDownloadPdf}
         onEmailInvoice={handleOpenEmailModal}
-        onOpenMarketIntelligence={() => setMarketIntelligenceOpen(true)}
       />
 
       {/* Email Invoice Share Modal */}

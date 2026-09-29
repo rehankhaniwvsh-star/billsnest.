@@ -8,6 +8,7 @@ export const initialInvoices: InvoiceData[] = [
     businessLogoLetter: 'B',
     clientName: 'Nova Studio',
     clientEmail: 'hello@novastudio.com',
+    clientAddress: '42 Innovation Parkway, Sector 5, Bengaluru, KA 560102',
     invoiceNumber: 'INV-2026-001',
     issueDate: '2026-07-15',
     dueDate: '2026-07-29',

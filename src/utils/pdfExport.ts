@@ -67,8 +67,18 @@ export const downloadInvoicePdf = async (invoice: InvoiceData, brandName: string
   doc.setTextColor(138, 129, 119);
   doc.text(invoice.clientEmail || '', 15, y);
 
+  if (invoice.clientAddress) {
+    const addressLines = doc.splitTextToSize(invoice.clientAddress, 95);
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 95, 90);
+    addressLines.forEach((line: string) => {
+      y += 4.5;
+      doc.text(line, 15, y);
+    });
+  }
+
   // Table Header
-  y += 12;
+  y += 10;
   doc.setFillColor(245, 240, 234);
   doc.rect(15, y, 180, 8, 'F');
   doc.setFontSize(8);

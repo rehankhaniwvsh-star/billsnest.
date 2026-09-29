@@ -37,7 +37,6 @@ interface DashboardModalProps {
   onDuplicateInvoice: (invoice: InvoiceData) => void;
   onDownloadPdf: (invoice: InvoiceData) => void;
   onEmailInvoice: (invoice: InvoiceData) => void;
-  onOpenMarketIntelligence?: () => void;
 }
 
 export const DashboardModal: React.FC<DashboardModalProps> = ({
@@ -52,7 +51,6 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
   onDuplicateInvoice,
   onDownloadPdf,
   onEmailInvoice,
-  onOpenMarketIntelligence,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Paid' | 'Sent' | 'Draft' | 'Overdue'>('All');
@@ -176,18 +174,6 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
               >
                 <User className="w-3.5 h-3.5 text-orange-600" />
                 <span>Sign In</span>
-              </button>
-            )}
-
-            {onOpenMarketIntelligence && (
-              <button
-                onClick={onOpenMarketIntelligence}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 cursor-pointer transition-all shadow-xs"
-                title="Search live tax rates and freelance benchmarks with Gemini 3.5 Flash Search Grounding"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                <span className="hidden md:inline">Live Tax &amp; Rates</span>
-                <span className="md:hidden">Rates AI</span>
               </button>
             )}
 

@@ -29,7 +29,6 @@ import { BrandLogo, ReceiptLogoIcon } from './BrandLogo';
 import { MorphingMascot } from './MorphingMascot';
 import { InvoiceSchema, validateStrict, ValidationErrorDetail } from '../schemas/strictSchemas';
 import { UpiPaymentModal } from './UpiPaymentModal';
-import { UpiInvoiceWidget } from './UpiInvoiceWidget';
 
 interface InvoiceStudioViewProps {
   brand: BrandSettings;
@@ -556,6 +555,15 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                     className="p-2.5 bg-[var(--background)] border border-[var(--border)] rounded text-[var(--foreground)]"
                   />
                 </div>
+                <input
+                  type="text"
+                  value={invoice.clientAddress || ''}
+                  placeholder="Client Address (Street, City, State, ZIP, Country)"
+                  onChange={(e) =>
+                    setInvoice({ ...invoice, clientAddress: e.target.value })
+                  }
+                  className="w-full p-2.5 bg-[var(--background)] border border-[var(--border)] rounded text-[var(--foreground)]"
+                />
               </div>
             </div>
 
@@ -936,6 +944,11 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                 {invoice.clientName}
               </div>
               <div className="text-[var(--muted-foreground)]">{invoice.clientEmail}</div>
+              {invoice.clientAddress && (
+                <div className="text-[var(--muted-foreground)] whitespace-pre-line mt-0.5">
+                  {invoice.clientAddress}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-right sm:text-right">
@@ -1035,34 +1048,6 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
               </div>
             </div>
           </div>
-
-          {/* UPI Instant Payment Card on Invoice Document */}
-          {invoice.bankDetails?.upiId ? (
-            <UpiInvoiceWidget
-              upiId={invoice.bankDetails.upiId}
-              payeeName={invoice.businessName || brand.brandName}
-              amount={grandTotal}
-              currency={invoice.currency}
-              invoiceNumber={invoice.invoiceNumber}
-              onOpenUpiModal={() => setUpiModalOpen(true)}
-            />
-          ) : (
-            !isClientViewMode && (
-              <div className="border border-dashed border-orange-500/30 bg-orange-500/5 rounded-lg p-3 text-xs flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-[var(--muted-foreground)]">
-                  <QrCode className="w-4 h-4 text-orange-600 shrink-0" />
-                  <span>Accept 0% fee payments via Google Pay, PhonePe, and Paytm with UPI.</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUpiModalOpen(true)}
-                  className="px-2.5 py-1 text-[11px] font-bold bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors cursor-pointer shrink-0"
-                >
-                  Enable UPI QR
-                </button>
-              </div>
-            )
-          )}
 
           {/* Bank & Payment Details Card on Invoice Document */}
           {invoice.bankDetails && (invoice.bankDetails.bankName || invoice.bankDetails.accountNumber || invoice.bankDetails.accountName || invoice.bankDetails.routingCode || invoice.bankDetails.upiId) && (

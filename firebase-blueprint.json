@@ -68,6 +68,11 @@
           "description": "Client email address for billing and delivery",
           "maxLength": 256
         },
+        "clientAddress": {
+          "type": "string",
+          "description": "Physical billing address of the client",
+          "maxLength": 300
+        },
         "businessName": {
           "type": "string",
           "description": "Issuing company or freelancer name",

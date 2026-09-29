@@ -115,11 +115,28 @@ export interface UserAccount {
   email: string;
   name: string;
   avatarUrl?: string;
-  provider: 'google' | 'email';
+  provider?: 'google' | 'email' | 'github' | string;
   createdAt: string;
-  lastLoginAt: string;
+  lastLoginAt?: string;
   companyName?: string;
+  businessName?: string;
+  role?: string;
+  onboardingCompleted?: boolean;
   password?: string;
+  [key: string]: any;
+}
+
+export type UserProfile = UserAccount;
+
+export interface CustomerOnboardingAnswers {
+  businessName?: string;
+  businessType?: string;
+  industry?: string;
+  monthlyInvoiceVolume?: string;
+  primaryCurrency?: string;
+  defaultTaxRate?: number;
+  acceptedTerms?: boolean;
+  [key: string]: any;
 }
 
 export interface InvoiceItem {
@@ -136,6 +153,7 @@ export interface InvoiceData {
   businessLogoLetter: string;
   clientName: string;
   clientEmail: string;
+  clientAddress?: string;
   invoiceNumber: string;
   issueDate: string;
   dueDate: string;

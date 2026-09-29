@@ -13,7 +13,6 @@ interface HeaderProps {
   isAdminOpen: boolean;
   isAdminAuthenticated: boolean;
   onLockAdmin: () => void;
-  onOpenMarketIntelligence?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,7 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
   isAdminOpen,
   isAdminAuthenticated,
   onLockAdmin,
-  onOpenMarketIntelligence,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -77,19 +75,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             FAQ
           </a>
-          {onOpenMarketIntelligence && (
-            <button
-              onClick={onOpenMarketIntelligence}
-              className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:opacity-85 flex items-center gap-1.5 cursor-pointer"
-              title="Real-time tax rates & freelance market research grounded with Google Search"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-              <span>Live Rates</span>
-              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-300 rounded-full">
-                AI
-              </span>
-            </button>
-          )}
           <button
             onClick={onOpenDashboard}
             className="text-sm font-semibold text-[var(--primary)] hover:opacity-80 flex items-center gap-1.5 cursor-pointer"
@@ -173,19 +158,6 @@ export const Header: React.FC<HeaderProps> = ({
                       <LayoutDashboard className="w-3.5 h-3.5 text-orange-500" />
                       <span>Open Invoices Dashboard</span>
                     </button>
-
-                    {onOpenMarketIntelligence && (
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          onOpenMarketIntelligence();
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                        <span>Live Market &amp; Tax Research</span>
-                      </button>
-                    )}
 
                     <button
                       onClick={() => {
@@ -369,19 +341,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <User className="w-4 h-4 text-orange-600" />
                 <span>Sign In / Create Account</span>
-              </button>
-            )}
-
-            {onOpenMarketIntelligence && (
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenMarketIntelligence();
-                }}
-                className="w-full py-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs font-bold rounded-xl flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4 text-blue-500" />
-                <span>Live Tax &amp; Rates Intelligence (Google AI)</span>
               </button>
             )}
 
