@@ -33,9 +33,9 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
   isOpen,
   onClose,
   onSuccessRedirectDashboard,
-  brandName = 'Billnest',
+  brandName = 'Invobill',
   tagline = 'Invoices, paid faster',
-  logoLetter = 'B',
+  logoLetter = 'I',
 }) => {
   const {
     signInWithGoogle,

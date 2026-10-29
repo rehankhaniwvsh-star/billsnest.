@@ -1,7 +1,7 @@
-# Robots.txt for Billnest
+# Robots.txt for Invobill
 User-agent: *
 Allow: /
 
 # Google Search Console XML Sitemap Location
-Sitemap: https://billsnest.vercel.app/sitemap.xml
+Sitemap: https://invobill.vercel.app/sitemap.xml
 

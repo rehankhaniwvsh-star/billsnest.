@@ -7,7 +7,7 @@
   <xsl:template match="/">
     <html lang="en">
       <head>
-        <title>XML Sitemap — Billnest</title>
+        <title>XML Sitemap — Invobill</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <style>
           :root {
@@ -216,7 +216,7 @@
           </div>
 
           <div class="footer">
-            Generated automatically for Billnest • <a href="/">Return to Homepage</a>
+            Generated automatically for Invobill • <a href="/">Return to Homepage</a>
           </div>
         </div>
       </body>

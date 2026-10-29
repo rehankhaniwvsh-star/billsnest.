@@ -29,7 +29,7 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Column 1: Brand Info */}
           <div className="space-y-4">
             <BrandLogo
-              brandName={brand.brandName || 'Billnest'}
+              brandName={brand.brandName || 'Invobill'}
               tagline={brand.tagline || 'Invoices, paid faster'}
               size="md"
               showTagline={true}
@@ -112,7 +112,7 @@ export const Footer: React.FC<FooterProps> = ({
             <ul className="space-y-2.5 text-xs sm:text-sm text-[var(--muted-foreground)]">
               <li>
                 <a href="#about" className="hover:text-[var(--foreground)] transition-colors">
-                  About Billnest
+                  About Invobill
                 </a>
               </li>
               <li>
@@ -152,7 +152,7 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <a
-                  href={`mailto:${brand.contactEmail || 'hello@billnest.app'}`}
+                  href={`mailto:${brand.contactEmail || 'hello@invobill.app'}`}
                   className="hover:text-[var(--foreground)] transition-colors"
                 >
                   Contact Support
@@ -191,7 +191,7 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--muted-foreground)]">
-          <p>© {new Date().getFullYear()} {brand.brandName || 'Billnest'}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {brand.brandName || 'Invobill'}. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>

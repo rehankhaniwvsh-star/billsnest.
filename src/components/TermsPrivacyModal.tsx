@@ -14,8 +14,8 @@ export const TermsPrivacyModal: React.FC<TermsPrivacyModalProps> = ({
   isOpen,
   onClose,
   initialTab = 'privacy',
-  brandName = 'Billnest',
-  contactEmail = 'hello@billnest.app',
+  brandName = 'Invobill',
+  contactEmail = 'hello@invobill.app',
 }) => {
   const [activeTab, setActiveTab] = React.useState<'privacy' | 'terms'>(initialTab);
 

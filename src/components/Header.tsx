@@ -48,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Brand Logo with Enchanted Receipt Icon & Tagline */}
         <a href="#" className="cursor-pointer">
           <BrandLogo
-            brandName={brand.brandName || 'Billnest'}
+            brandName={brand.brandName || 'Invobill'}
             tagline={brand.tagline || 'Invoices, paid faster'}
             size="md"
             showTagline={true}
@@ -233,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Interactive Micro Mascot in Header */}
-          <div className="hidden lg:flex items-center" title="Billnest Animated Mascot">
+          <div className="hidden lg:flex items-center" title="Invobill Animated Mascot">
             <MorphingMascot mode="cycle" size="custom" customSizeClass="w-7 h-7" interactive={true} />
           </div>
 

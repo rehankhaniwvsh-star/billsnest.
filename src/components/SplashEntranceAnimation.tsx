@@ -11,7 +11,7 @@ interface SplashEntranceAnimationProps {
 }
 
 export const SplashEntranceAnimation: React.FC<SplashEntranceAnimationProps> = ({
-  brandName = 'Billnest',
+  brandName = 'Invobill',
   tagline = 'Invoices, paid faster',
   onComplete,
 }) => {

@@ -74,14 +74,14 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
       discountAmount: 10,
       themeColor: brand.primaryColor || '#FF5238',
       templateStyle: 'Modern',
-      notes: 'Thank you for choosing Billnest. Payment received with thanks.',
+      notes: 'Thank you for choosing Invobill. Payment received with thanks.',
       bankDetails: brand.defaultBankDetails || {
         bankName: 'HDFC Bank Ltd',
-        accountName: brand.brandName || 'Billnest Studio',
+        accountName: brand.brandName || 'Invobill Studio',
         accountNumber: '50200084729103',
         routingCode: 'HDFC0001234',
         iban: 'IN50HDFC00012345020008472',
-        upiId: 'billnest@hdfcbank',
+        upiId: 'invobill@hdfcbank',
         paymentInstructions: 'Please include invoice number in wire transfer narration.',
       },
       items: [
@@ -267,7 +267,7 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
             >
               <ArrowLeft className="w-4 h-4 text-[var(--muted-foreground)] group-hover:text-orange-600" />
               <ReceiptLogoIcon sizeClass="w-6 h-6 rounded-lg" />
-              <span className="font-extrabold">{brand.brandName || 'Billnest'}</span>
+              <span className="font-extrabold">{brand.brandName || 'Invobill'}</span>
             </button>
 
             <div className="h-4 w-px bg-[var(--border)] hidden sm:block" />
@@ -1162,7 +1162,7 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
 
           {/* Footer Watermark */}
           <div className="text-center pt-4 border-t border-[var(--border)] text-[11px] text-[var(--muted-foreground)]">
-            Powered by {brand.brandName || 'Billnest'} • Professional Branded Invoicing
+            Powered by {brand.brandName || 'Invobill'} • Professional Branded Invoicing
           </div>
         </div>
       </div>

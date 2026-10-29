@@ -27,9 +27,9 @@ import {
 } from './services/firestoreService';
 import { downloadInvoicePdf } from './utils/pdfExport';
 
-const LOCAL_STORAGE_CMS_KEY = 'billnest_cms_data_v1';
-const LOCAL_STORAGE_INVOICES_KEY = 'billnest_invoices_data_v1';
-const LOCAL_STORAGE_ADMIN_AUTH_KEY = 'billnest_admin_auth_v1';
+const LOCAL_STORAGE_CMS_KEY = 'invobill_cms_data_v1';
+const LOCAL_STORAGE_INVOICES_KEY = 'invobill_invoices_data_v1';
+const LOCAL_STORAGE_ADMIN_AUTH_KEY = 'invobill_admin_auth_v1';
 
 function AppContent() {
   const {
@@ -44,14 +44,19 @@ function AppContent() {
     try {
       const saved =
         localStorage.getItem(LOCAL_STORAGE_CMS_KEY) ||
+        localStorage.getItem('billnest_cms_data_v1') ||
         localStorage.getItem('invoiceify_cms_data_v1') ||
         localStorage.getItem('ledgerly_cms_data_v1');
       if (saved) {
         const cleansedJson = saved
-          .replace(/Invoiceify/g, 'Billnest')
-          .replace(/invoiceify/g, 'billnest')
-          .replace(/Ledgerly/g, 'Billnest')
-          .replace(/ledgerly/g, 'billnest');
+          .replace(/Invoiceify/g, 'Invobill')
+          .replace(/invoiceify/g, 'invobill')
+          .replace(/Ledgerly/g, 'Invobill')
+          .replace(/ledgerly/g, 'invobill')
+          .replace(/Billnest/g, 'Invobill')
+          .replace(/billnest/g, 'invobill')
+          .replace(/Billsnest/g, 'Invobill')
+          .replace(/billsnest/g, 'invobill');
         const parsed = JSON.parse(cleansedJson);
         return parsed;
       }
@@ -65,14 +70,19 @@ function AppContent() {
     try {
       const saved =
         localStorage.getItem(LOCAL_STORAGE_INVOICES_KEY) ||
+        localStorage.getItem('billnest_invoices_data_v1') ||
         localStorage.getItem('invoiceify_invoices_data_v1') ||
         localStorage.getItem('ledgerly_invoices_data_v1');
       if (saved) {
         const cleansedJson = saved
-          .replace(/Invoiceify/g, 'Billnest')
-          .replace(/invoiceify/g, 'billnest')
-          .replace(/Ledgerly/g, 'Billnest')
-          .replace(/ledgerly/g, 'billnest');
+          .replace(/Invoiceify/g, 'Invobill')
+          .replace(/invoiceify/g, 'invobill')
+          .replace(/Ledgerly/g, 'Invobill')
+          .replace(/ledgerly/g, 'invobill')
+          .replace(/Billnest/g, 'Invobill')
+          .replace(/billnest/g, 'invobill')
+          .replace(/Billsnest/g, 'Invobill')
+          .replace(/billsnest/g, 'invobill');
         const parsed: InvoiceData[] = JSON.parse(cleansedJson);
         return parsed;
       }
@@ -346,14 +356,14 @@ function AppContent() {
   };
 
   const handleCreateNewInvoice = () => {
-    const businessTitle = currentUser?.companyName || currentUser?.name || cms.brand.brandName || 'Billnest Studio';
-    const businessEmail = currentUser?.email || cms.brand.contactEmail || 'billing@billnest.app';
+    const businessTitle = currentUser?.companyName || currentUser?.name || cms.brand.brandName || 'Invobill Studio';
+    const businessEmail = currentUser?.email || cms.brand.contactEmail || 'billing@invobill.app';
 
     const newInv: InvoiceData = {
       id: `inv-${Date.now()}`,
       businessName: businessTitle,
       businessEmail: businessEmail,
-      businessLogoLetter: cms.brand.logoLetter || 'B',
+      businessLogoLetter: cms.brand.logoLetter || 'I',
       clientName: 'New Client',
       clientEmail: 'client@example.com',
       invoiceNumber: `INV-00${Math.floor(50 + Math.random() * 45)}`,
@@ -372,7 +382,7 @@ function AppContent() {
         accountNumber: '50200084729103',
         routingCode: 'HDFC0001234',
         iban: 'IN50HDFC00012345020008472',
-        upiId: 'billnest@hdfcbank',
+        upiId: 'invobill@hdfcbank',
         paymentInstructions: 'Please specify invoice number in wire transfer reference.',
       },
       items: [
@@ -427,7 +437,7 @@ function AppContent() {
     >
       {/* Full-Screen Website Entrance Splash Intro Animation */}
       <SplashEntranceAnimation
-        brandName={cms.brand.brandName || 'Billnest'}
+        brandName={cms.brand.brandName || 'Invobill'}
         tagline={cms.brand.tagline || 'Invoices, paid faster'}
         onComplete={() => {
           if (!isAuthenticated) {
@@ -478,7 +488,7 @@ function AppContent() {
 
           <AboutSection
             about={cms.about}
-            brandName={cms.brand?.brandName || 'Billnest'}
+            brandName={cms.brand?.brandName || 'Invobill'}
             primaryColor={cms.brand.primaryColor}
           />
 
@@ -526,9 +536,9 @@ function AppContent() {
         isOpen={isAuthModalOpen}
         onClose={closeAuthModal}
         onSuccessRedirectDashboard={handleAuthSuccessRedirectDashboard}
-        brandName={cms.brand?.brandName || 'Billnest'}
+        brandName={cms.brand?.brandName || 'Invobill'}
         tagline={cms.brand?.tagline || 'Invoices, paid faster'}
-        logoLetter={cms.brand?.logoLetter || 'B'}
+        logoLetter={cms.brand?.logoLetter || 'I'}
       />
 
       {/* Terms of Service & Privacy Policy Modal */}
@@ -536,8 +546,8 @@ function AppContent() {
         isOpen={termsPrivacyModalOpen}
         onClose={() => setTermsPrivacyModalOpen(false)}
         initialTab={termsPrivacyTab}
-        brandName={cms.brand?.brandName || 'Billnest'}
-        contactEmail={cms.brand?.contactEmail || 'hello@billnest.app'}
+        brandName={cms.brand?.brandName || 'Invobill'}
+        contactEmail={cms.brand?.contactEmail || 'hello@invobill.app'}
       />
 
       {/* Live Invoices Dashboard Modal */}
@@ -570,7 +580,7 @@ function AppContent() {
         onClose={() => setAdminAuthModalOpen(false)}
         onSuccess={handleAdminAuthSuccess}
         correctPin={cms.brand.adminPin || '1234'}
-        brandName={cms.brand.brandName || 'Billnest'}
+        brandName={cms.brand.brandName || 'Invobill'}
       />
 
       {/* Protected Live CMS Admin Modal */}

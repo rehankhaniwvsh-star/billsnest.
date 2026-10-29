@@ -34,7 +34,7 @@ export const downloadInvoicePdf = async (invoice: InvoiceData, brandName: string
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(invoice.businessEmail || 'billing@billnest.app', 22, 33);
+  doc.text(invoice.businessEmail || 'billing@invobill.app', 22, 33);
 
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -224,7 +224,7 @@ export const downloadInvoicePdf = async (invoice: InvoiceData, brandName: string
   // Footer branding tag
   doc.setFontSize(8);
   doc.setTextColor(138, 129, 119);
-  doc.text('Powered by Billnest • Professional Branded Invoicing', 105, 280, { align: 'center' });
+  doc.text('Powered by Invobill • Professional Branded Invoicing', 105, 280, { align: 'center' });
 
   // Save/Download PDF
   const filename = `${invoice.invoiceNumber || 'Invoice'}_${(invoice.clientName || 'Client').replace(/\s+/g, '_')}.pdf`;

@@ -3,9 +3,9 @@ import { InvoiceData } from '../types';
 export const initialInvoices: InvoiceData[] = [
   {
     id: 'inv-101',
-    businessName: 'Billnest Studio',
-    businessEmail: 'billing@billnest.app',
-    businessLogoLetter: 'B',
+    businessName: 'Invobill Studio',
+    businessEmail: 'billing@invobill.app',
+    businessLogoLetter: 'I',
     clientName: 'Nova Studio',
     clientEmail: 'hello@novastudio.com',
     clientAddress: '42 Innovation Parkway, Sector 5, Bengaluru, KA 560102',
@@ -35,9 +35,9 @@ export const initialInvoices: InvoiceData[] = [
   },
   {
     id: 'inv-102',
-    businessName: 'Billnest Studio',
-    businessEmail: 'billing@billnest.app',
-    businessLogoLetter: 'B',
+    businessName: 'Invobill Studio',
+    businessEmail: 'billing@invobill.app',
+    businessLogoLetter: 'I',
     clientName: 'Acme Global Corp',
     clientEmail: 'accounts@acmeglobal.io',
     invoiceNumber: 'INV-2026-002',
@@ -52,11 +52,11 @@ export const initialInvoices: InvoiceData[] = [
     notes: 'Payment due within 15 business days.',
     bankDetails: {
       bankName: 'Standard Chartered Bank',
-      accountName: 'Billnest Studio Global',
+      accountName: 'Invobill Studio Global',
       accountNumber: '987654321098',
       routingCode: 'SCBL0036001',
       iban: 'IN88SCBL0036001987654321',
-      upiId: 'billnest@scb',
+      upiId: 'invobill@scb',
       paymentInstructions: 'NEFT / RTGS / Wire transfers accepted.',
     },
     items: [
@@ -66,9 +66,9 @@ export const initialInvoices: InvoiceData[] = [
   },
   {
     id: 'inv-103',
-    businessName: 'Billnest Studio',
-    businessEmail: 'billing@billnest.app',
-    businessLogoLetter: 'B',
+    businessName: 'Invobill Studio',
+    businessEmail: 'billing@invobill.app',
+    businessLogoLetter: 'I',
     clientName: 'Apex Creative Lab',
     clientEmail: 'finance@apexcreative.co',
     invoiceNumber: 'INV-2026-003',
@@ -83,7 +83,7 @@ export const initialInvoices: InvoiceData[] = [
     notes: 'Draft invoice for upcoming design retainer.',
     bankDetails: {
       bankName: 'Silicon Valley Bank / First Republic',
-      accountName: 'Billnest Studio LLC',
+      accountName: 'Invobill Studio LLC',
       accountNumber: '1234876590',
       routingCode: '121000358',
       iban: 'US64SVB012100035812348765',
@@ -95,9 +95,9 @@ export const initialInvoices: InvoiceData[] = [
   },
   {
     id: 'inv-104',
-    businessName: 'Billnest Studio',
-    businessEmail: 'billing@billnest.app',
-    businessLogoLetter: 'B',
+    businessName: 'Invobill Studio',
+    businessEmail: 'billing@invobill.app',
+    businessLogoLetter: 'I',
     clientName: 'Vanguard Tech Inc',
     clientEmail: 'payables@vanguardtech.dev',
     invoiceNumber: 'INV-2026-004',
@@ -112,10 +112,10 @@ export const initialInvoices: InvoiceData[] = [
     notes: 'Overdue balance notice. Please process immediately.',
     bankDetails: {
       bankName: 'HDFC Bank Ltd',
-      accountName: 'Billnest Studio Private Limited',
+      accountName: 'Invobill Studio Private Limited',
       accountNumber: '50200084729103',
       routingCode: 'HDFC0001234',
-      upiId: 'billnest@hdfcbank',
+      upiId: 'invobill@hdfcbank',
       paymentInstructions: 'Please settle pending invoices via IMPS or RTGS.',
     },
     items: [

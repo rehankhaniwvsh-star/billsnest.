@@ -266,7 +266,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
     const timeStr = new Date().toLocaleTimeString();
     try {
       const targetPass = isCorrectPassword ? 'admin1234' : simPassword;
-      const targetEmail = isCorrectPassword ? 'admin@billnest.app' : simEmail;
+      const targetEmail = isCorrectPassword ? 'admin@invobill.app' : simEmail;
 
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -400,7 +400,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
     if (type === 'valid_login') {
       setSchemaTestEndpoint('/api/auth/login');
       setSchemaTestPayload(
-        JSON.stringify({ email: 'admin@billnest.app', password: 'admin1234' }, null, 2)
+        JSON.stringify({ email: 'admin@invobill.app', password: 'admin1234' }, null, 2)
       );
     } else if (type === 'invalid_email') {
       setSchemaTestEndpoint('/api/auth/login');
@@ -442,8 +442,8 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
           {
             invoice: {
               invoiceNumber: 'INV-9901',
-              businessName: 'Billnest Studio',
-              businessEmail: 'billing@billnest.app',
+              businessName: 'Invobill Studio',
+              businessEmail: 'billing@invobill.app',
               clientName: 'Acme Corp',
               clientEmail: 'finance@acmeworks.com',
               issueDate: '2026-08-01',
@@ -499,7 +499,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
     downloadAnchor.setAttribute('href', dataStr);
     downloadAnchor.setAttribute(
       'download',
-      `billnest_cms_backup_${new Date().toISOString().split('T')[0]}.json`
+      `invobill_cms_backup_${new Date().toISOString().split('T')[0]}.json`
     );
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
@@ -591,7 +591,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
             <ReceiptLogoIcon sizeClass="w-9 h-9 rounded-xl" showSparkle={false} />
             <div>
               <h3 className="font-bold text-sm text-[var(--foreground)]">
-                {formData.brand.brandName || 'Billnest'} Brand Content Manager
+                {formData.brand.brandName || 'Invobill'} Brand Content Manager
               </h3>
               <p className="text-[11px] text-[var(--muted-foreground)]">
                 Live editing, style configuration, and Gemini AI copy generation
@@ -813,7 +813,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
                   </div>
                   <div className="p-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-xs">
                     <BrandLogo
-                      brandName={formData.brand.brandName || 'Billnest'}
+                      brandName={formData.brand.brandName || 'Invobill'}
                       tagline={formData.brand.tagline || 'Invoices, paid faster'}
                       size="md"
                       showTagline={true}
@@ -993,7 +993,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. Uzafa Shop or Billnest Studio"
+                          placeholder="e.g. Uzafa Shop or Invobill Studio"
                           value={formData.brand.defaultBankDetails?.accountName || ''}
                           onChange={(e) =>
                             setFormData({
@@ -1095,7 +1095,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
                         className="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] font-mono"
                       />
                       <p className="text-[11px] text-[var(--muted-foreground)] mt-1 leading-relaxed">
-                        Paste either your Google Search Console verification code or the full HTML meta tag. Billnest will automatically inject: <br />
+                        Paste either your Google Search Console verification code or the full HTML meta tag. Invobill will automatically inject: <br />
                         <code className="text-[var(--primary)] font-mono text-[10px]">
                           &lt;meta name="google-site-verification" content="{formData.brand.googleSiteVerification || 'YOUR_CODE'}" /&gt;
                         </code>
@@ -1581,7 +1581,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
                     <input
                       type="text"
                       value={formData.about?.eyebrow || ''}
-                      placeholder={`About ${formData.brand.brandName || 'Billnest'}`}
+                      placeholder={`About ${formData.brand.brandName || 'Invobill'}`}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -1832,7 +1832,7 @@ export const CmsAdminModal: React.FC<CmsAdminModalProps> = ({
                     </label>
                     <textarea
                       rows={3}
-                      placeholder="e.g., Write a punchy 2-sentence subheadline for Billnest targeting high-end design agencies and freelancers."
+                      placeholder="e.g., Write a punchy 2-sentence subheadline for Invobill targeting high-end design agencies and freelancers."
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       className="w-full p-2.5 bg-[var(--card)] border border-[var(--border)] rounded text-xs text-[var(--foreground)]"

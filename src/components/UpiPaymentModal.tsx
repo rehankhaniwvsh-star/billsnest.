@@ -59,7 +59,7 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
 
   const upiUri = buildUpiUri({
     upiId: activeUpiId || 'merchant@upi',
-    payeeName: payeeName || 'Billnest Merchant',
+    payeeName: payeeName || 'Invobill Merchant',
     amount,
     currency,
     invoiceNumber,
@@ -170,7 +170,7 @@ export const UpiPaymentModal: React.FC<UpiPaymentModalProps> = ({
                 Payee
               </span>
               <span className="text-xs font-bold text-[var(--foreground)] truncate max-w-[160px] block">
-                {payeeName || 'Billnest Studio'}
+                {payeeName || 'Invobill Studio'}
               </span>
             </div>
           </div>

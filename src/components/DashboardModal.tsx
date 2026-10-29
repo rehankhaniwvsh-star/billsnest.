@@ -130,11 +130,11 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
             <div
               className="w-9 h-9 rounded text-white font-bold flex items-center justify-center text-sm shadow-sm bg-[var(--primary)]"
             >
-              {brand.logoLetter || 'B'}
+              {brand.logoLetter || 'I'}
             </div>
             <div>
               <h2 className="font-bold text-base text-[var(--foreground)]">
-                {brand.brandName || 'Billnest'} Invoices Dashboard
+                {brand.brandName || 'Invobill'} Invoices Dashboard
               </h2>
               <p className="text-xs text-[var(--muted-foreground)]">
                 Manage existing invoices, track payments, filter statuses & themes

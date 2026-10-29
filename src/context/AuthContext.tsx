@@ -25,8 +25,8 @@ interface AuthContextType {
   updateUserProfile: (updates: Partial<UserAccount>) => Promise<void>;
 }
 
-const LOCAL_STORAGE_USER_KEY = 'billnest_current_user_v1';
-const LOCAL_STORAGE_USERS_DB_KEY = 'billnest_registered_users_db_v1';
+const LOCAL_STORAGE_USER_KEY = 'invobill_current_user_v1';
+const LOCAL_STORAGE_USERS_DB_KEY = 'invobill_registered_users_db_v1';
 
 // Seed default demo accounts
 const defaultUsersDb: UserAccount[] = [
@@ -42,7 +42,7 @@ const defaultUsersDb: UserAccount[] = [
   },
   {
     id: 'user-email-demo',
-    email: 'alex@billnest.app',
+    email: 'alex@invobill.app',
     name: 'Alex Rivera',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&q=80',
     provider: 'email',

@@ -40,10 +40,10 @@ async function startServer() {
 
   // In-memory demo account store for auth verification
   const demoUsers: Record<string, { email: string; passwordHash: string; name: string; createdAt: string }> = {
-    "admin@billnest.app": {
-      email: "admin@billnest.app",
+    "admin@invobill.app": {
+      email: "admin@invobill.app",
       passwordHash: "admin1234",
-      name: "Billnest Admin",
+      name: "Invobill Admin",
       createdAt: new Date().toISOString(),
     },
     "user@example.com": {
@@ -82,7 +82,7 @@ async function startServer() {
   app.get("/api/health", publicLimiter, (req, res) => {
     res.json({
       status: "ok",
-      service: "Billnest Server",
+      service: "Invobill Server",
       timestamp: new Date().toISOString(),
     });
   });
@@ -122,14 +122,14 @@ async function startServer() {
 
   // Dynamic Sitemap XML generator and alias routes (100% compliant with Google Search Console)
   app.get(["/sitemap.xml", "/sitemap", "/sitemaps.xml", "/sitemap.html", "/site-map"], (req, res) => {
-    const rawHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "billsnest.vercel.app";
+    const rawHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "invobill.vercel.app";
     let host = rawHost.split(",")[0].trim();
     if (host.endsWith(":443")) host = host.slice(0, -4);
     else if (host.endsWith(":80")) host = host.slice(0, -3);
 
     const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-    // Ensure Google Search Console receives https://billsnest.vercel.app as the canonical domain
-    let baseUrl = "https://billsnest.vercel.app";
+    // Ensure Google Search Console receives https://invobill.vercel.app as the canonical domain
+    let baseUrl = "https://invobill.vercel.app";
     if (isLocalhost) {
       baseUrl = `http://${host}`;
     } else if (host && !host.includes("run.app")) {
@@ -137,7 +137,7 @@ async function startServer() {
     }
     const today = new Date().toISOString().split("T")[0];
 
-    // Canonical list of indexed pages for Billnest
+    // Canonical list of indexed pages for Invobill
     const SITEMAP_PAGES = [
       {
         path: "/",
@@ -185,7 +185,7 @@ async function startServer() {
         path: "/about",
         priority: "0.7",
         changefreq: "monthly",
-        title: "About Billnest — Built for Freelancers, Creators & Agencies",
+        title: "About Invobill — Built for Freelancers, Creators & Agencies",
       },
       {
         path: "/faq",
@@ -228,7 +228,7 @@ async function startServer() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Billnest — XML Sitemap Index (${SITEMAP_PAGES.length} Pages)</title>
+  <title>Invobill — XML Sitemap Index (${SITEMAP_PAGES.length} Pages)</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #f8fafc; padding: 2rem 1rem; }
     .card { max-width: 860px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 2rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
@@ -245,7 +245,7 @@ async function startServer() {
 </head>
 <body>
   <div class="card">
-    <h1>📄 Billnest XML Sitemap Index</h1>
+    <h1>📄 Invobill XML Sitemap Index</h1>
     <p>Official Google Search Console and web crawler sitemap indexing all key pages and tools.</p>
     <div class="stats">
       <div class="stat-item">Total Indexed URLs<strong>${SITEMAP_PAGES.length} Pages</strong></div>
@@ -307,13 +307,13 @@ ${urlsXml}
 
   // Serve Robots.txt for Googlebot and search crawlers
   app.get("/robots.txt", (req, res) => {
-    const rawHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "billsnest.vercel.app";
+    const rawHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "invobill.vercel.app";
     let host = rawHost.split(",")[0].trim();
     if (host.endsWith(":443")) host = host.slice(0, -4);
     else if (host.endsWith(":80")) host = host.slice(0, -3);
 
     const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
-    let baseUrl = "https://billsnest.vercel.app";
+    let baseUrl = "https://invobill.vercel.app";
     if (isLocalhost) {
       baseUrl = `http://${host}`;
     } else if (host && !host.includes("run.app")) {
@@ -400,7 +400,7 @@ Sitemap: ${baseUrl}/sitemap.xml
         const { prompt, contentType, currentText } = req.body;
 
         const ai = getAi();
-        const systemInstruction = `You are an expert brand strategist and UX copywriter for Billnest, a premium invoicing platform for freelancers, creators, and agencies.
+        const systemInstruction = `You are an expert brand strategist and UX copywriter for Invobill, a premium invoicing platform for freelancers, creators, and agencies.
 Your goal is to write high-converting, professional, crisp, and persuasive website copy.
 Return clean plain text without surrounding quotes or conversational meta-text.
 Content type requested: ${contentType || "General Copy"}.
@@ -424,7 +424,7 @@ Current copy reference (if any): "${currentText || ""}".`;
           console.warn("[Copy Generator] Gemini quota reached, returning refined copy benchmark.");
           return res.json({
             success: true,
-            generatedText: `Create polished, high-converting invoices in seconds. Billnest simplifies billing for modern freelancers, studios, and agencies with automatic payment tracking and seamless client invoicing.`,
+            generatedText: `Create polished, high-converting invoices in seconds. Invobill simplifies billing for modern freelancers, studios, and agencies with automatic payment tracking and seamless client invoicing.`,
           });
         }
         return handleServerError(
@@ -464,7 +464,7 @@ Current copy reference (if any): "${currentText || ""}".`;
 
         try {
           const ai = getAi();
-          const systemInstruction = `You are an authoritative real-time financial intelligence and billing advisor for Billnest invoicing platform.
+          const systemInstruction = `You are an authoritative real-time financial intelligence and billing advisor for Invobill invoicing platform.
 You MUST use the real-time Google Search tool to retrieve the latest and most accurate up-to-date data for:
 - Current market rates, hourly pricing benchmarks, and contractor compensation standards
 - Statutory tax regulations, GST/VAT/Sales Tax percentages, invoice requirements, and compliance rules
@@ -540,7 +540,7 @@ Provide clear, factual, actionable data with specific numbers, effective dates, 
               model: "gemini-3.8-flash",
               contents: query,
               config: {
-                systemInstruction: "You are a senior financial advisor for the Billnest invoicing platform. Provide accurate, professional guidance regarding billing, invoice requirements, contractor rates, and tax standards.",
+                systemInstruction: "You are a senior financial advisor for the Invobill invoicing platform. Provide accurate, professional guidance regarding billing, invoice requirements, contractor rates, and tax standards.",
               },
             });
             const text = fallbackResponse.text?.trim();
@@ -734,7 +734,7 @@ Provide clear, factual, actionable data with specific numbers, effective dates, 
       success: true,
       user: {
         role: "owner",
-        organization: "Billnest Studio",
+        organization: "Invobill Studio",
         status: "active",
       },
     });

@@ -119,8 +119,8 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
     if (isStandaloneView) {
       const prevTitle = document.title;
       document.title = activeTab === 'signup' 
-        ? `Create Your Account — ${brand.brandName || 'Billnest'}`
-        : `Sign In — ${brand.brandName || 'Billnest'}`;
+        ? `Create Your Account — ${brand.brandName || 'Invobill'}`
+        : `Sign In — ${brand.brandName || 'Invobill'}`;
       return () => {
         document.title = prevTitle;
       };
@@ -175,7 +175,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
       if (!res.ok || !data.success) {
         // Check local store fallback for accounts created on this device
         try {
-          const raw = localStorage.getItem('billnest_users_db');
+          const raw = localStorage.getItem('invobill_users_db') || localStorage.getItem('billnest_users_db');
           const db = raw ? JSON.parse(raw) : {};
           const localUser = db[signInEmail.toLowerCase().trim()];
           if (localUser && localUser.password === signInPassword) {
@@ -202,7 +202,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
 
       const profile: UserProfile = {
         id: `usr-${Date.now()}`,
-        name: data.user?.name || 'Billnest Member',
+        name: data.user?.name || 'Invobill Member',
         email: data.user?.email || signInEmail.trim(),
         businessName:
           data.user?.businessName || (brand.brandName ? `${brand.brandName} Studio` : 'Creative Studio'),
@@ -250,7 +250,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
 
       if (!res.ok || !data.success) {
         // Fallback local DB check
-        const raw = localStorage.getItem('billnest_users_db');
+        const raw = localStorage.getItem('invobill_users_db') || localStorage.getItem('billnest_users_db');
         const db = raw ? JSON.parse(raw) : {};
         const localUser = db[email.toLowerCase()];
         if (localUser && localUser.password === password) {
@@ -258,7 +258,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
             id: `usr-${Date.now()}`,
             name: localUser.name || 'Member',
             email: localUser.email,
-            businessName: localUser.businessName || `${brand.brandName || 'Billnest'} Studio`,
+            businessName: localUser.businessName || `${brand.brandName || 'Invobill'} Studio`,
             role: localUser.role || 'freelancer',
             createdAt: localUser.createdAt || new Date().toISOString(),
           };
@@ -277,7 +277,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
             id: `usr-${Date.now()}`,
             name: email.split('@')[0],
             email,
-            businessName: `${brand.brandName || 'Billnest'} Studio`,
+            businessName: `${brand.brandName || 'Invobill'} Studio`,
             role: 'business',
             createdAt: new Date().toISOString(),
           };
@@ -293,7 +293,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
 
       const profile: UserProfile = {
         id: `usr-${Date.now()}`,
-        name: data.user?.name || 'Billnest Member',
+        name: data.user?.name || 'Invobill Member',
         email: data.user?.email || email,
         businessName:
           data.user?.businessName || (brand.brandName ? `${brand.brandName} Studio` : 'Creative Studio'),
@@ -357,7 +357,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
 
       // Persist to local browser store as well for offline/reliable continuity
       try {
-        const raw = localStorage.getItem('billnest_users_db');
+        const raw = localStorage.getItem('invobill_users_db') || localStorage.getItem('billnest_users_db');
         const db = raw ? JSON.parse(raw) : {};
         db[signUpEmail.toLowerCase().trim()] = {
           email: signUpEmail.toLowerCase().trim(),
@@ -367,7 +367,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
           role: signUpRole,
           createdAt: new Date().toISOString(),
         };
-        localStorage.setItem('billnest_users_db', JSON.stringify(db));
+        localStorage.setItem('invobill_users_db', JSON.stringify(db));
       } catch {}
 
       const profile: UserProfile = {
@@ -425,7 +425,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
 
       // Persist to browser users db
       try {
-        const raw = localStorage.getItem('billnest_users_db');
+        const raw = localStorage.getItem('invobill_users_db') || localStorage.getItem('billnest_users_db');
         const db = raw ? JSON.parse(raw) : {};
         db[socialEmail.toLowerCase().trim()] = {
           email: socialEmail.toLowerCase().trim(),
@@ -434,7 +434,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
           role: 'freelancer',
           createdAt: new Date().toISOString(),
         };
-        localStorage.setItem('billnest_users_db', JSON.stringify(db));
+        localStorage.setItem('invobill_users_db', JSON.stringify(db));
       } catch {}
 
       setSuccessMessage(`Authenticated via ${provider}! Launching setup...`);
@@ -543,7 +543,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
         <SignInPage
           title={
             <span className="tracking-tight text-foreground font-semibold">
-              Sign In to <span className="text-primary">{brand.brandName || 'Billnest'}</span>
+              Sign In to <span className="text-primary">{brand.brandName || 'Invobill'}</span>
             </span>
           }
           description="Access your workspace and manage professional invoices across devices"
@@ -624,7 +624,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-orange-500/10 text-orange-600 border border-orange-500/20">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Billnest Member Access</span>
+              <span>Invobill Member Access</span>
             </div>
             {!isStandaloneView && (
               <a
@@ -641,10 +641,10 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
           </div>
           <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-[var(--foreground)]">
             {currentUser
-              ? 'Your Billnest Account'
+              ? 'Your Invobill Account'
               : activeTab === 'signup'
               ? 'Create your free account'
-              : 'Sign in to Billnest'}
+              : 'Sign in to Invobill'}
           </h2>
           <p className="text-sm sm:text-base text-[var(--muted-foreground)] leading-relaxed">
             {currentUser
@@ -961,7 +961,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
                     <span>Signing in...</span>
                   ) : (
                     <>
-                      <span>Sign In to Billnest</span>
+                      <span>Sign In to Invobill</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -1009,7 +1009,7 @@ export const AuthSection: React.FC<AuthSectionProps> = ({
                 {/* Account Type Selector */}
                 <div>
                   <label className="block text-xs font-bold text-[var(--foreground)] uppercase tracking-wider mb-1.5">
-                    How will you use Billnest?
+                    How will you use Invobill?
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {[

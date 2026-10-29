@@ -65,13 +65,13 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
       // Save to local storage database
       try {
-        const raw = localStorage.getItem('billnest_users_db');
+        const raw = localStorage.getItem('invobill_users_db') || localStorage.getItem('billnest_users_db');
         const db = raw ? JSON.parse(raw) : {};
         db[selectedEmail.toLowerCase().trim()] = {
           ...profile,
           password: 'google-oauth-managed',
         };
-        localStorage.setItem('billnest_users_db', JSON.stringify(db));
+        localStorage.setItem('invobill_users_db', JSON.stringify(db));
       } catch {}
 
       setIsLoading(false);
@@ -104,10 +104,10 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
         {/* Brand-Level Google Header Banner */}
         <div className="p-6 sm:p-8 pb-6 border-b border-[var(--border)] bg-linear-to-b from-orange-500/5 to-transparent">
           <div className="flex items-center gap-3 mb-4">
-            {/* Dual Brand Integration (Billnest + Google) */}
+            {/* Dual Brand Integration (Invobill + Google) */}
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-2xl bg-[var(--foreground)] text-[var(--background)] flex items-center justify-center font-black text-sm shadow-xs">
-                {brand.logoLetter || 'B'}
+                {brand.logoLetter || 'I'}
               </div>
               <div className="w-4 h-0.5 bg-[var(--border)]" />
               <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center p-2">
@@ -325,7 +325,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               <span>Google Account Security & Data Privacy</span>
             </div>
             <p className="leading-relaxed">
-              To continue, Google will share your verified name, email address (<strong className="text-[var(--foreground)]">{email || defaultEmail}</strong>), and language preference with {brand.brandName || 'Billnest'}.
+              To continue, Google will share your verified name, email address (<strong className="text-[var(--foreground)]">{email || defaultEmail}</strong>), and language preference with {brand.brandName || 'Invobill'}.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px]">
               <button
@@ -333,7 +333,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 onClick={onOpenPrivacy}
                 className="text-orange-600 underline font-semibold hover:text-orange-700 cursor-pointer"
               >
-                Billnest Privacy Policy
+                Invobill Privacy Policy
               </button>
               <span>•</span>
               <button

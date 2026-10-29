@@ -1,6 +1,6 @@
-# Billnest — Branded Invoice Generator & Management Studio
+# Invobill — Branded Invoice Generator & Management Studio
 
-**Billnest** is a high-performance, elegant, full-stack invoice generation and client management platform tailored for freelancers, agencies, and small businesses.
+**Invobill** is a high-performance, elegant, full-stack invoice generation and client management platform tailored for freelancers, agencies, and small businesses.
 
 ---
 
@@ -48,4 +48,4 @@
 
 ---
 
-© Billnest • Professional Branded Invoicing
+© Invobill • Professional Branded Invoicing

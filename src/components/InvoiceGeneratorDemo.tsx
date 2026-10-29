@@ -59,9 +59,9 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
     if (initialInvoice) return initialInvoice;
     return {
       id: `inv-${Date.now()}`,
-      businessName: brand.brandName || 'Billnest Studio',
-      businessEmail: brand.contactEmail || 'billing@billnest.app',
-      businessLogoLetter: brand.logoLetter || 'B',
+      businessName: brand.brandName || 'Invobill Studio',
+      businessEmail: brand.contactEmail || 'billing@invobill.app',
+      businessLogoLetter: brand.logoLetter || 'I',
       clientName: 'Acme Corporation',
       clientEmail: 'billing@acme.corp',
       invoiceNumber: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,

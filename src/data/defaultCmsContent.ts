@@ -2,13 +2,13 @@ import { CmsContent } from '../types';
 
 export const defaultCmsContent: CmsContent = {
   brand: {
-    brandName: 'Billnest',
+    brandName: 'Invobill',
     tagline: 'Invoices, paid faster',
     primaryColor: '#FF5238',
     accentColor: '#FFF0EB',
     backgroundColor: '#FBFBFA',
-    contactEmail: 'hello@billnest.app',
-    logoLetter: 'B',
+    contactEmail: 'hello@invobill.app',
+    logoLetter: 'I',
     googleSiteVerification: 'googleacb1159f81828443',
     adminPin: '1234',
     showAdminButtonInHeader: false,
@@ -43,9 +43,9 @@ export const defaultCmsContent: CmsContent = {
     },
   },
   about: {
-    eyebrow: 'About Billnest',
+    eyebrow: 'About Invobill',
     title: 'Built for people who invoice on their own.',
-    paragraph1: 'Billnest started from a simple frustration: most free invoicing tools look like spreadsheets wearing a logo. Freelancers, creators, and small agencies deserve invoices that look like they came from a real, established business — without paying for a "professional" plan to get there.',
+    paragraph1: 'Invobill started from a simple frustration: most free invoicing tools look like spreadsheets wearing a logo. Freelancers, creators, and small agencies deserve invoices that look like they came from a real, established business — without paying for a "professional" plan to get there.',
     paragraph2: 'So every account gets the full toolkit — branded PDFs, share links, payment tracking, recurring billing — free, from day one. No upsells, no watermarks, no "upgrade to remove branding".',
     stats: [
       { id: '1', number: '100%', label: 'Free, always' },
@@ -138,11 +138,11 @@ export const defaultCmsContent: CmsContent = {
   },
   faqs: {
     title: 'Frequently Asked Questions',
-    subtitle: 'Everything you need to know before you get started with Billnest.',
+    subtitle: 'Everything you need to know before you get started with Invobill.',
     items: [
       {
         id: 'faq-1',
-        question: 'Is Billnest really free?',
+        question: 'Is Invobill really free?',
         answer: 'Yes. Every account gets unlimited invoices, all templates, and every feature — there are no paid tiers or locked features.',
         category: 'Pricing',
       },
@@ -184,7 +184,7 @@ export const defaultCmsContent: CmsContent = {
       author: 'Aarav Sharma',
       role: 'Founder',
       company: 'Nova Studio',
-      quote: 'Our clients constantly compliment how sleek our invoices look. Billnest made us look like a 50-person agency overnight.',
+      quote: 'Our clients constantly compliment how sleek our invoices look. Invobill made us look like a 50-person agency overnight.',
       rating: 5,
     },
     {
