@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HeroData, BrandSettings } from '../types';
-import { ArrowRight, Check, Star, Sparkles, Zap, Shield, Search, Sliders } from 'lucide-react';
+import { ArrowRight, Check, Star, Sparkles, Zap, Shield, Search, Sliders, QrCode } from 'lucide-react';
 import BookmarkIcon from './icons/BookmarkIcon';
 import MagnifierIcon from './icons/MagnifierIcon';
 import BrainCircuitIcon from './icons/BrainCircuitIcon';
@@ -245,8 +245,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </span>
               </div>
 
+              {/* Instant UPI QR Badge */}
+              <div className="mt-3 flex items-center justify-between px-3 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-xs">
+                <span className="flex items-center gap-1.5 font-bold text-orange-600 dark:text-orange-400 text-[11px]">
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Instant UPI QR Enabled</span>
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground)] font-mono">
+                  GPay • PhonePe • BHIM
+                </span>
+              </div>
+
               {/* Status Switcher Badge */}
-              <div className="mt-5 flex items-center justify-between bg-[var(--muted)] border border-[var(--border)] rounded-xl p-2.5">
+              <div className="mt-4 flex items-center justify-between bg-[var(--muted)] border border-[var(--border)] rounded-xl p-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-[var(--muted-foreground)]">Status:</span>
                   <button

@@ -21,10 +21,12 @@ import {
   Landmark,
   QrCode,
   Smartphone,
+  Clock,
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { downloadInvoicePdf } from '../utils/pdfExport';
+import { buildUpiUri, generateUpiQrDataUrl } from '../utils/upi';
 import { UpiPaymentModal } from './UpiPaymentModal';
+import { calculateInvoiceMath } from '../utils/invoiceCalculations';
 
 interface InvoiceGeneratorDemoProps {
   brand: BrandSettings;
@@ -52,6 +54,7 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
   const [validationError, setValidationError] = useState<string>('');
   const [validationDetails, setValidationDetails] = useState<ValidationErrorDetail[]>([]);
   const [upiModalOpen, setUpiModalOpen] = useState(false);
+  const [upiQrDataUrl, setUpiQrDataUrl] = useState<string>('');
 
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -91,13 +94,48 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
 
   if (!isOpen) return null;
 
-  // Invoice Math
-  const subtotal = invoice.items.reduce(
-    (acc, item) => acc + item.quantity * item.rate,
-    0
-  );
-  const taxAmount = (subtotal * (invoice.taxRate || 0)) / 100;
-  const grandTotal = Math.max(0, subtotal + taxAmount - (invoice.discountAmount || 0));
+  // Accounting Calculations (Calculates Tax proportionally on discounted base and supports deduction/TDS)
+  const {
+    subtotal,
+    discountType,
+    rawDiscount,
+    discountValue,
+    taxableAmount,
+    taxRate,
+    taxAmount,
+    isTaxDeduct,
+    grandTotal,
+  } = calculateInvoiceMath(invoice);
+
+  // Generate live UPI QR Code
+  React.useEffect(() => {
+    let isMounted = true;
+    const upiId = invoice.bankDetails?.upiId?.trim();
+    if (upiId) {
+      const uri = buildUpiUri({
+        upiId,
+        payeeName: invoice.businessName || brand.brandName || 'Merchant',
+        amount: grandTotal,
+        currency: invoice.currency,
+        invoiceNumber: invoice.invoiceNumber,
+      });
+      generateUpiQrDataUrl(uri, 300).then((url) => {
+        if (isMounted) setUpiQrDataUrl(url);
+      });
+    } else {
+      setUpiQrDataUrl('');
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    invoice.bankDetails?.upiId,
+    invoice.businessName,
+    brand.brandName,
+    grandTotal,
+    invoice.currency,
+    invoice.invoiceNumber,
+  ]);
 
   const handleAddItem = () => {
     const newItem: InvoiceItem = {
@@ -130,28 +168,13 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
     });
   };
 
-  // PDF Download powered by html2canvas + jsPDF
+  // High-Resolution PDF Download with full typography & crisp UPI QR code
   const handleDownloadPdf = async () => {
-    if (!printableRef.current) return;
     setDownloadingPdf(true);
-
     try {
-      const element = printableRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#FFFFFF',
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${invoice.invoiceNumber}_${invoice.clientName.replace(/\s+/g, '_')}.pdf`);
+      await downloadInvoicePdf(invoice, brand.brandName || 'Invobill', printableRef.current);
     } catch (err) {
-      console.error('Failed to generate PDF canvas, falling back to print dialog:', err);
+      console.error('Failed to generate PDF, falling back to print dialog:', err);
       window.print();
     } finally {
       setDownloadingPdf(false);
@@ -600,23 +623,29 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
               </div>
             </div>
 
-            {/* Bank Details Card */}
-            <div className="bg-[var(--muted)]/40 border border-[var(--border)] rounded-lg p-4 text-xs space-y-3">
-              <div className="flex items-center justify-between">
+            {/* Bank Details Card with Live Scannable UPI QR Code */}
+            <div className="bg-[var(--muted)]/40 border border-[var(--border)] rounded-xl p-4 text-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border)] pb-2.5">
                 <div className="flex items-center gap-2 font-bold text-[var(--foreground)]">
                   <Landmark className="w-4 h-4 text-orange-500" />
                   <span className="text-xs uppercase tracking-wide">Bank & Remittance Details</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setUpiModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:text-orange-700 bg-orange-500/10 hover:bg-orange-500/20 px-2 py-0.5 rounded cursor-pointer transition-colors"
-                >
-                  <QrCode className="w-3 h-3" />
-                  <span>Test UPI QR</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {invoice.bankDetails?.upiId && (
+                    <button
+                      type="button"
+                      onClick={() => setUpiModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white bg-orange-600 hover:bg-orange-700 px-2.5 py-1 rounded shadow-xs cursor-pointer transition-colors"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Test / Pay via UPI</span>
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
                   <label className="text-[10px] uppercase font-semibold text-[var(--muted-foreground)] block mb-1">
                     Bank Name
@@ -738,6 +767,49 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Scannable Live UPI QR Code Frame */}
+                {upiQrDataUrl ? (
+                  <div
+                    onClick={() => setUpiModalOpen(true)}
+                    className="flex flex-col items-center justify-center p-3 bg-white dark:bg-neutral-900 border-2 border-orange-500/30 rounded-xl shadow-sm hover:border-orange-500 cursor-pointer transition-all shrink-0 text-center"
+                    title="Click to test pay via UPI"
+                  >
+                    <img
+                      src={upiQrDataUrl}
+                      alt="Scan to pay via UPI"
+                      className="w-24 h-24 sm:w-28 sm:h-28 object-contain rounded"
+                    />
+                    <span className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider mt-1.5 block">
+                      SCAN TO PAY (UPI)
+                    </span>
+                    <span className="text-[8.5px] text-neutral-500 font-semibold block">
+                      GPay • PhonePe • Paytm • BHIM
+                    </span>
+                    <span className="text-[9.5px] font-mono font-bold text-neutral-800 dark:text-neutral-200 mt-1 px-1.5 py-0.5 bg-orange-50 dark:bg-neutral-800 rounded">
+                      {invoice.currency}{grandTotal.toLocaleString()}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-3 bg-orange-500/5 border border-dashed border-orange-500/30 rounded-xl text-center shrink-0">
+                    <QrCode className="w-7 h-7 text-orange-400 mb-1" />
+                    <span className="text-[11px] font-bold text-[var(--foreground)]">Instant UPI QR</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultUpi = 'uzafa.shop@okhdfcbank';
+                        setInvoice({
+                          ...invoice,
+                          bankDetails: { ...(invoice.bankDetails || {}), upiId: defaultUpi },
+                        });
+                      }}
+                      className="mt-1.5 px-2 py-0.5 text-[10px] font-bold text-white bg-orange-500 hover:bg-orange-600 rounded transition-colors cursor-pointer"
+                    >
+                      + Add UPI ID
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Math Totals & Notes */}
@@ -756,7 +828,7 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
                 ></textarea>
               </div>
 
-              <div className="space-y-2 bg-[var(--muted)]/50 p-4 border border-[var(--border)] rounded text-xs">
+              <div className="space-y-2.5 bg-[var(--muted)]/50 p-4 border border-[var(--border)] rounded text-xs">
                 <div className="flex justify-between text-[var(--muted-foreground)]">
                   <span>Subtotal:</span>
                   <span className="font-mono font-semibold text-[var(--foreground)]">
@@ -765,41 +837,127 @@ export const InvoiceGeneratorDemo: React.FC<InvoiceGeneratorDemoProps> = ({
                   </span>
                 </div>
 
-                <div className="flex justify-between items-center text-[var(--muted-foreground)]">
-                  <span>Tax (+ %):</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      value={invoice.taxRate}
-                      onChange={(e) =>
-                        setInvoice({
-                          ...invoice,
-                          taxRate: Number(e.target.value) || 0,
-                        })
-                      }
-                      className="w-16 p-1 bg-[var(--card)] border border-[var(--border)] rounded text-right text-xs"
-                    />
-                    <span className="text-[11px] font-mono text-[var(--muted-foreground)]">
-                      +{invoice.currency}{taxAmount.toLocaleString()}
-                    </span>
+                {/* Discount with Type Selector */}
+                <div className="space-y-1 pt-1 border-t border-[var(--border)]/60">
+                  <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                    <div className="flex items-center gap-1.5">
+                      <span>Discount:</span>
+                      <div className="inline-flex rounded border border-[var(--border)] p-0.5 bg-[var(--card)] text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setInvoice({ ...invoice, discountType: 'percentage' })}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            invoice.discountType === 'percentage'
+                              ? 'bg-amber-600 text-white'
+                              : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                          }`}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInvoice({ ...invoice, discountType: 'amount' })}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            invoice.discountType !== 'percentage'
+                              ? 'bg-amber-600 text-white'
+                              : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                          }`}
+                        >
+                          {invoice.currency}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={invoice.discountType === 'percentage' ? 100 : undefined}
+                        value={invoice.discountAmount}
+                        onChange={(e) =>
+                          setInvoice({
+                            ...invoice,
+                            discountAmount: Number(e.target.value) || 0,
+                          })
+                        }
+                        className="w-16 p-1 bg-[var(--card)] border border-[var(--border)] rounded text-right text-xs"
+                        placeholder="0"
+                      />
+                      <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+                        -{invoice.currency}{discountValue.toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center text-[var(--muted-foreground)]">
-                  <span>Discount (- {invoice.currency}):</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={invoice.discountAmount}
-                    onChange={(e) =>
-                      setInvoice({
-                        ...invoice,
-                        discountAmount: Number(e.target.value) || 0,
-                      })
-                    }
-                    className="w-20 p-1 bg-[var(--card)] border border-[var(--border)] rounded text-right text-xs"
-                  />
+                {/* Net Taxable Base indicator when discount is present */}
+                {discountValue > 0 && taxRate > 0 && (
+                  <div className="flex justify-between text-[11px] text-[var(--muted-foreground)] pl-2 border-l-2 border-amber-500/50">
+                    <span>Taxable Base:</span>
+                    <span className="font-mono">
+                      {invoice.currency}
+                      {taxableAmount.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+
+                {/* Tax with Add / Deduct TDS Toggle */}
+                <div className="space-y-1 pt-1 border-t border-[var(--border)]/60">
+                  <div className="flex justify-between items-center text-[var(--muted-foreground)]">
+                    <div className="flex items-center gap-1.5">
+                      <span>Tax / TDS:</span>
+                      <div className="inline-flex rounded border border-[var(--border)] p-0.5 bg-[var(--card)] text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => setInvoice({ ...invoice, taxType: 'add' })}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            invoice.taxType !== 'deduct'
+                              ? 'bg-orange-500 text-white'
+                              : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                          }`}
+                          title="Add tax (GST/VAT) to subtotal"
+                        >
+                          + Add
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInvoice({ ...invoice, taxType: 'deduct' })}
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            invoice.taxType === 'deduct'
+                              ? 'bg-rose-600 text-white'
+                              : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                          }`}
+                          title="Deduct withholding tax (TDS) %"
+                        >
+                          - TDS
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={invoice.taxRate}
+                        onChange={(e) =>
+                          setInvoice({
+                            ...invoice,
+                            taxRate: Number(e.target.value) || 0,
+                          })
+                        }
+                        className="w-16 p-1 bg-[var(--card)] border border-[var(--border)] rounded text-right text-xs"
+                        placeholder="0"
+                      />
+                      <span
+                        className={`text-[11px] font-mono ${
+                          isTaxDeduct
+                            ? 'text-rose-600 dark:text-rose-400 font-medium'
+                            : 'text-[var(--muted-foreground)]'
+                        }`}
+                      >
+                        {isTaxDeduct ? '-' : '+'}{invoice.currency}{taxAmount.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="h-px bg-[var(--border)] my-2"></div>

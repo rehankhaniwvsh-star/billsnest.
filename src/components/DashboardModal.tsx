@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { InvoiceData, BrandSettings } from '../types';
+import { calculateInvoiceMath } from '../utils/invoiceCalculations';
 import {
   X,
   Plus,
@@ -59,12 +60,8 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Compute Metrics
-  const calculateTotal = (inv: InvoiceData) => {
-    const subtotal = inv.items.reduce((acc, i) => acc + i.quantity * i.rate, 0);
-    const tax = (subtotal * (inv.taxRate || 0)) / 100;
-    return Math.max(0, subtotal + tax - (inv.discountAmount || 0));
-  };
+  // Compute Metrics using central accounting math
+  const calculateTotal = (inv: InvoiceData) => calculateInvoiceMath(inv).grandTotal;
 
   const totalInvoiced = invoices.reduce((acc, inv) => acc + calculateTotal(inv), 0);
   const totalPaid = invoices

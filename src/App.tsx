@@ -356,14 +356,15 @@ function AppContent() {
   };
 
   const handleCreateNewInvoice = () => {
-    const businessTitle = currentUser?.companyName || currentUser?.name || cms.brand.brandName || 'Invobill Studio';
-    const businessEmail = currentUser?.email || cms.brand.contactEmail || 'billing@invobill.app';
+    // Default to configured brand name and professional billing email rather than personal Google account
+    const businessTitle = cms.brand.brandName || 'Invobill Studio';
+    const businessEmail = cms.brand.contactEmail || 'billing@invobill.app';
 
     const newInv: InvoiceData = {
       id: `inv-${Date.now()}`,
       businessName: businessTitle,
       businessEmail: businessEmail,
-      businessLogoLetter: cms.brand.logoLetter || 'I',
+      businessLogoLetter: cms.brand.logoLetter || businessTitle.charAt(0).toUpperCase() || 'I',
       clientName: 'New Client',
       clientEmail: 'client@example.com',
       invoiceNumber: `INV-00${Math.floor(50 + Math.random() * 45)}`,
@@ -372,7 +373,9 @@ function AppContent() {
       currency: '₹',
       status: 'Draft',
       taxRate: 5,
+      taxType: 'add',
       discountAmount: 0,
+      discountType: 'amount',
       themeColor: cms.brand.primaryColor || '#FF5238',
       templateStyle: 'Modern',
       notes: 'Thank you for your business.',
@@ -446,16 +449,18 @@ function AppContent() {
         }}
       />
 
-      {/* Universal Top Header Bar */}
-      <Header
-        brand={cms.brand}
-        onOpenCms={handleRequestOpenCms}
-        onOpenGenerator={handleCreateNewInvoice}
-        onOpenDashboard={() => setDashboardOpen(true)}
-        isAdminOpen={cmsAdminOpen}
-        isAdminAuthenticated={isAdminAuthenticated}
-        onLockAdmin={handleLockAdmin}
-      />
+      {/* Universal Top Header Bar (Landing Mode) */}
+      {currentView !== 'studio' && (
+        <Header
+          brand={cms.brand}
+          onOpenCms={handleRequestOpenCms}
+          onOpenGenerator={handleCreateNewInvoice}
+          onOpenDashboard={() => setDashboardOpen(true)}
+          isAdminOpen={cmsAdminOpen}
+          isAdminAuthenticated={isAdminAuthenticated}
+          onLockAdmin={handleLockAdmin}
+        />
+      )}
 
       {currentView === 'studio' ? (
         /* Full Screen Dedicated Invoice Studio Page */
@@ -469,6 +474,7 @@ function AppContent() {
           onSelectInvoiceById={(id) => setSelectedInvoiceId(id)}
           onCreateNew={handleCreateNewInvoice}
           onOpenEmail={handleOpenEmailModal}
+          onOpenDashboard={() => setDashboardOpen(true)}
         />
       ) : (
         /* Landing Page View */

@@ -155,10 +155,33 @@ export const InvoiceSchema = z
       )
       .default(""),
     businessLogoLetter: z.string().optional().default("I"),
+    businessLogoUrl: z
+      .string()
+      .max(2000000, "Business logo image size is too large")
+      .optional()
+      .default(""),
+    ownerName: z
+      .string()
+      .trim()
+      .max(120, "Owner name cannot exceed 120 characters")
+      .optional()
+      .default(""),
+    gstNumber: z
+      .string()
+      .trim()
+      .max(60, "GST/VAT number cannot exceed 60 characters")
+      .optional()
+      .default(""),
     businessPhone: z
       .string()
       .trim()
       .max(30, "Business phone cannot exceed 30 characters")
+      .optional()
+      .default(""),
+    businessWebsite: z
+      .string()
+      .trim()
+      .max(200, "Business website cannot exceed 200 characters")
       .optional()
       .default(""),
     businessAddress: z
@@ -180,6 +203,18 @@ export const InvoiceSchema = z
         (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
         "Client email must be a valid email address if provided"
       )
+      .default(""),
+    clientPhone: z
+      .string()
+      .trim()
+      .max(30, "Client phone cannot exceed 30 characters")
+      .optional()
+      .default(""),
+    clientGst: z
+      .string()
+      .trim()
+      .max(60, "Client GST/VAT cannot exceed 60 characters")
+      .optional()
       .default(""),
     clientAddress: z
       .string()
@@ -208,11 +243,13 @@ export const InvoiceSchema = z
       .min(0, "Tax rate cannot be negative")
       .max(100, "Tax rate cannot exceed 100%")
       .default(0),
+    taxType: z.enum(["add", "deduct"]).optional().default("add"),
     discountAmount: z
       .number()
       .min(0, "Discount amount cannot be negative")
       .max(1000000000, "Discount cannot exceed invoice boundary")
       .default(0),
+    discountType: z.enum(["amount", "percentage"]).optional().default("amount"),
     notes: z
       .string()
       .trim()
@@ -228,6 +265,7 @@ export const InvoiceSchema = z
     themeColor: z.string().optional(),
     templateStyle: z.enum(["Classic", "Modern", "Minimal"]).optional(),
     bankDetails: BankDetailsSchema.optional(),
+    showBankDetails: z.boolean().optional().default(true),
     createdAt: z.string().optional(),
   })
   .strict();
