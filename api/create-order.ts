@@ -26,9 +26,13 @@ export default async function handler(req: VercelApiRequest, res: VercelApiRespo
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keyId || !keySecret) {
+    const missing = [
+      !keyId ? 'RAZORPAY_KEY_ID' : null,
+      !keySecret ? 'RAZORPAY_KEY_SECRET' : null,
+    ].filter(Boolean);
     return res.status(401).json({
       success: false,
-      error: 'Razorpay credentials are not configured on the server.',
+      error: `Razorpay credentials are not configured on the server (missing: ${missing.join(', ')}). Add them in your hosting environment variables and redeploy.`,
       code: 'RAZORPAY_AUTH_MISSING',
     });
   }

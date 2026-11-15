@@ -85,10 +85,21 @@ async function startServer() {
 
   // Healthcheck endpoint
   app.get("/api/health", publicLimiter, (req, res) => {
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || "";
+    const hasSecret = Boolean(process.env.RAZORPAY_KEY_SECRET);
     res.json({
       status: "ok",
       service: "Invobill Server",
       timestamp: new Date().toISOString(),
+      razorpay: {
+        configured: Boolean(keyId && hasSecret),
+        mode: keyId.startsWith("rzp_live_")
+          ? "live"
+          : keyId.startsWith("rzp_test_")
+          ? "test"
+          : "none",
+        keyPrefix: keyId ? `${keyId.slice(0, 12)}...` : null,
+      },
     });
   });
 
@@ -808,9 +819,13 @@ Provide clear, factual, actionable data with specific numbers, effective dates, 
       const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
       if (!keyId || !keySecret) {
+        const missing = [
+          !keyId ? "RAZORPAY_KEY_ID" : null,
+          !keySecret ? "RAZORPAY_KEY_SECRET" : null,
+        ].filter(Boolean);
         return res.status(401).json({
           success: false,
-          error: "Razorpay credentials are not configured on the server.",
+          error: `Razorpay credentials are not configured on the server (missing: ${missing.join(", ")}). Add them in your hosting environment variables and redeploy.`,
           code: "RAZORPAY_AUTH_MISSING",
         });
       }
