@@ -138,9 +138,25 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
         ? `inv_${invoiceCheckout.invoiceNumber}_${Date.now()}`.slice(0, 38)
         : `sub_${selectedPlan}_${billingCycle}_${Date.now()}`.slice(0, 38);
 
+      const parseApiResponse = async (res: Response, endpoint: string) => {
+        const rawText = await res.text();
+        try {
+          return rawText ? JSON.parse(rawText) : {};
+        } catch {
+          if (res.status === 404) {
+            throw new Error(
+              `Payment endpoint (${endpoint}) was not found (HTTP 404). Make sure the backend server or /api serverless functions are deployed.`
+            );
+          }
+          throw new Error(
+            `Payment service returned an invalid response (HTTP ${res.status}). Please verify server deployment and Razorpay keys.`
+          );
+        }
+      };
+
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           amount: orderAmountMinor,
           currency: orderCurrency,
@@ -159,7 +175,7 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
         }),
       });
 
-      const orderData = await orderRes.json();
+      const orderData = await parseApiResponse(orderRes, '/api/create-order');
 
       if (!orderRes.ok || !orderData.success || !orderData.order_id) {
         setErrorMsg(orderData.error || 'Could not create Razorpay order. Please try again.');
@@ -208,7 +224,7 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
           try {
             const verifyRes = await fetch('/api/verify-payment', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -216,7 +232,7 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
               }),
             });
 
-            const verifyData = await verifyRes.json();
+            const verifyData = await parseApiResponse(verifyRes, '/api/verify-payment');
 
             if (!verifyRes.ok || !verifyData.success) {
               setErrorMsg(
