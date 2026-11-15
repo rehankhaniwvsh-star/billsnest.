@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { InvoiceData, BrandSettings } from '../types';
+import { InvoiceData, BrandSettings, SubscriptionPlanId } from '../types';
 import { calculateInvoiceMath } from '../utils/invoiceCalculations';
 import {
   X,
@@ -23,8 +23,12 @@ import {
   User,
   LogOut,
   ShieldCheck,
+  Lock,
+  CreditCard,
+  BellRing,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getPlanDefinition } from '../data/subscriptionPlans';
 
 interface DashboardModalProps {
   isOpen: boolean;
@@ -38,6 +42,8 @@ interface DashboardModalProps {
   onDuplicateInvoice: (invoice: InvoiceData) => void;
   onDownloadPdf: (invoice: InvoiceData) => void;
   onEmailInvoice: (invoice: InvoiceData) => void;
+  onSendReminder?: (invoice: InvoiceData) => void;
+  onOpenUpgrade?: (plan?: SubscriptionPlanId) => void;
 }
 
 export const DashboardModal: React.FC<DashboardModalProps> = ({
@@ -52,13 +58,80 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
   onDuplicateInvoice,
   onDownloadPdf,
   onEmailInvoice,
+  onSendReminder,
+  onOpenUpgrade,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Paid' | 'Sent' | 'Draft' | 'Overdue'>('All');
 
-  const { currentUser, isAuthenticated, signOut, openAuthModal } = useAuth();
+  const {
+    currentUser,
+    currentPlan,
+    planEntitlements,
+    isAuthenticated,
+    signOut,
+    openAuthModal,
+  } = useAuth();
+  const planDef = getPlanDefinition(currentPlan);
 
   if (!isOpen) return null;
+
+  const handleExportCsv = () => {
+    if (!planEntitlements.csvExportAllowed) {
+      onClose();
+      onOpenUpgrade?.('business');
+      return;
+    }
+
+    const csvEscape = (val: string | number) => {
+      const str = String(val ?? '');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'Invoice Number',
+      'Client Name',
+      'Client Email',
+      'Issue Date',
+      'Due Date',
+      'Status',
+      'Currency',
+      'Subtotal',
+      'Discount',
+      'Tax',
+      'Total Due',
+    ];
+
+    const rows = filteredInvoices.map((inv) => {
+      const m = calculateInvoiceMath(inv);
+      return [
+        inv.invoiceNumber,
+        inv.clientName,
+        inv.clientEmail,
+        inv.issueDate,
+        inv.dueDate,
+        inv.status,
+        inv.currency,
+        m.subtotal,
+        m.discountValue,
+        m.isTaxDeduct ? -m.taxAmount : m.taxAmount,
+        m.grandTotal,
+      ]
+        .map(csvEscape)
+        .join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `invobill-accounting-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Compute Metrics using central accounting math
   const calculateTotal = (inv: InvoiceData) => calculateInvoiceMath(inv).grandTotal;
@@ -175,8 +248,21 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
             )}
 
             <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenUpgrade?.(currentPlan === 'business' ? 'business' : 'pro');
+              }}
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full bg-[var(--accent)] text-[var(--primary)] border border-[var(--primary)]/20 hover:bg-[var(--primary)] hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              title="Manage or upgrade subscription"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>{currentPlan === 'free' ? 'Starter · Upgrade' : `${planDef.name} Plan`}</span>
+            </button>
+
+            <button
               onClick={onCreateNewInvoice}
-              className="btn-shader-primary inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-[var(--radius)] cursor-pointer"
+              className="btn-shader-primary inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-[var(--radius)] cursor-pointer whitespace-nowrap shrink-0"
             >
               <Plus className="w-4 h-4 btn-icon-hover-bounce" />
               <span>Create New Invoice</span>
@@ -263,16 +349,36 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
               ))}
             </div>
 
-            {/* Search Input */}
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
-              <input
-                type="text"
-                placeholder="Search client, invoice #..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius)] text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
-              />
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              {/* Search Input */}
+              <div className="relative flex-1 md:w-64">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <input
+                  type="text"
+                  placeholder="Search client, invoice #..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius)] text-xs text-[var(--foreground)] focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius)] text-xs font-bold bg-[var(--background)] hover:bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                title={
+                  planEntitlements.csvExportAllowed
+                    ? 'Export filtered invoices as CSV for GST/accounting'
+                    : 'Unlock GST & accounting CSV export on Business plan'
+                }
+              >
+                {!planEntitlements.csvExportAllowed ? (
+                  <Lock className="w-3.5 h-3.5 text-[var(--primary)]" />
+                ) : (
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
 
@@ -370,6 +476,18 @@ export const DashboardModal: React.FC<DashboardModalProps> = ({
                           {/* Actions */}
                           <td className="p-3.5">
                             <div className="flex items-center justify-center gap-1">
+                              {inv.status !== 'Paid' && onSendReminder && (
+                                <button
+                                  type="button"
+                                  onClick={() => onSendReminder(inv)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 mr-1 rounded-lg text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/25 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                                  title="Send pre-filled payment reminder email"
+                                >
+                                  <BellRing className="w-3 h-3" />
+                                  <span>Send Reminder</span>
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => onSelectInvoice(inv, false)}
                                 className="p-1.5 text-[var(--muted-foreground)] hover:text-[var(--primary)] rounded hover:bg-[var(--muted)] cursor-pointer"

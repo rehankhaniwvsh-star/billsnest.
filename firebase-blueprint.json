@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "User account profile document storing identity details",
+      "description": "User account profile document storing identity and subscription details",
       "type": "object",
       "properties": {
         "uid": {
@@ -30,6 +30,46 @@
           "description": "Company, studio, or freelancing agency name",
           "maxLength": 120
         },
+        "plan": {
+          "type": "string",
+          "description": "Active Invobill subscription tier",
+          "enum": ["free", "pro", "business"]
+        },
+        "billingCycle": {
+          "type": "string",
+          "description": "Subscription billing cadence",
+          "enum": ["monthly", "annual"]
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "description": "Current status of the user's subscription",
+          "enum": ["active", "trialing", "cancelled"]
+        },
+        "subscriptionCurrency": {
+          "type": "string",
+          "description": "Currency used for subscription billing",
+          "enum": ["INR", "USD"]
+        },
+        "subscriptionStartedAt": {
+          "type": "string",
+          "description": "Subscription start timestamp",
+          "maxLength": 64
+        },
+        "subscriptionExpiresAt": {
+          "type": "string",
+          "description": "Subscription renewal or expiry timestamp",
+          "maxLength": 64
+        },
+        "lastPaymentId": {
+          "type": "string",
+          "description": "Most recent verified Razorpay payment ID",
+          "maxLength": 100
+        },
+        "lastOrderId": {
+          "type": "string",
+          "description": "Most recent verified Razorpay order ID",
+          "maxLength": 100
+        },
         "createdAt": {
           "type": "string",
           "description": "Account registration timestamp",
@@ -42,6 +82,58 @@
         }
       },
       "required": ["uid", "email"]
+    },
+    "SubscriptionPayment": {
+      "title": "SubscriptionPayment",
+      "description": "Verified Razorpay subscription payment receipt owned by a user",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who owns this payment record",
+          "maxLength": 128
+        },
+        "orderId": {
+          "type": "string",
+          "description": "Razorpay order identifier",
+          "maxLength": 100
+        },
+        "paymentId": {
+          "type": "string",
+          "description": "Verified Razorpay payment identifier",
+          "maxLength": 100
+        },
+        "planId": {
+          "type": "string",
+          "description": "Purchased subscription tier",
+          "enum": ["free", "pro", "business"]
+        },
+        "billingCycle": {
+          "type": "string",
+          "description": "Purchased billing cycle",
+          "enum": ["monthly", "annual"]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Payment currency",
+          "enum": ["INR", "USD"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "Paid amount in major currency units"
+        },
+        "status": {
+          "type": "string",
+          "description": "Verification status",
+          "enum": ["verified"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Payment verification timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "orderId", "paymentId", "planId", "billingCycle", "status"]
     },
     "Invoice": {
       "title": "Invoice",
@@ -126,6 +218,10 @@
           "description": "Selected layout template style",
           "maxLength": 32
         },
+        "hideWatermark": {
+          "type": "boolean",
+          "description": "Whether white-label Pro/Business user hid the Invobill footer"
+        },
         "createdAt": {
           "type": "string",
           "description": "Creation timestamp",
@@ -148,6 +244,10 @@
     "/users/{userId}/invoices/{invoiceId}": {
       "schema": "Invoice",
       "description": "Collection of invoices owned by the specified user"
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": "SubscriptionPayment",
+      "description": "Verified Razorpay subscription payment receipts owned by the user"
     }
   }
 }

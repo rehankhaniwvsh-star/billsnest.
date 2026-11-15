@@ -534,10 +534,13 @@ const buildOffscreenInvoiceCanvas = async (
       </div>
     </div>
 
-    <!-- Footer Watermark -->
-    <div style="text-align: center; font-size: 10.5px; color: #94A3B8; padding: 12px 40px 24px 40px;">
-      Powered by ${escapeHtml(brandName || 'Invobill')} • Professional Branded Invoicing
-    </div>
+    ${
+      invoice.hideWatermark
+        ? '<div style="height: 20px;"></div>'
+        : `<div style="text-align: center; font-size: 10.5px; color: #94A3B8; padding: 12px 40px 24px 40px;">
+            Powered by ${escapeHtml(brandName || 'Invobill')} • Professional Branded Invoicing
+          </div>`
+    }
   `;
 
   document.body.appendChild(container);
@@ -837,11 +840,13 @@ const runDirectJsPdfFallback = async (
     }
   }
 
-  doc.setFontSize(8);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`Powered by ${brandName || 'Invobill'} • Professional Branded Invoicing`, 105, 282, {
-    align: 'center',
-  });
+  if (!invoice.hideWatermark) {
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Powered by ${brandName || 'Invobill'} • Professional Branded Invoicing`, 105, 282, {
+      align: 'center',
+    });
+  }
 
   doc.save(`${getCleanFilenameBase(invoice)}.pdf`);
 };

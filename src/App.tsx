@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { defaultCmsContent } from './data/defaultCmsContent';
 import { initialInvoices } from './data/initialInvoices';
-import { CmsContent, InvoiceData } from './types';
+import {
+  BillingCycle,
+  CmsContent,
+  InvoiceData,
+  PlanCurrency,
+  SubscriptionPlanId,
+} from './types';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { FeaturesSection } from './components/FeaturesSection';
+import { PricingSection } from './components/PricingSection';
+import { PlansPageView } from './components/PlansPageView';
 import { AboutSection } from './components/AboutSection';
 import { HowItWorksSection } from './components/HowItWorksSection';
 import { FaqSection } from './components/FaqSection';
@@ -19,6 +27,10 @@ import { AdminAuthModal } from './components/AdminAuthModal';
 import { TermsPrivacyModal } from './components/TermsPrivacyModal';
 import { SplashEntranceAnimation } from './components/SplashEntranceAnimation';
 import { AuthWhiteScreenModal } from './components/AuthWhiteScreenModal';
+import {
+  SubscriptionCheckoutModal,
+  InvoiceCheckoutPayload,
+} from './components/SubscriptionCheckoutModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   saveInvoiceToFirestore,
@@ -26,6 +38,7 @@ import {
   subscribeToUserInvoices,
 } from './services/firestoreService';
 import { downloadInvoicePdf } from './utils/pdfExport';
+import { calculateInvoiceMath } from './utils/invoiceCalculations';
 
 const LOCAL_STORAGE_CMS_KEY = 'invobill_cms_data_v1';
 const LOCAL_STORAGE_INVOICES_KEY = 'invobill_invoices_data_v1';
@@ -34,6 +47,7 @@ const LOCAL_STORAGE_ADMIN_AUTH_KEY = 'invobill_admin_auth_v1';
 function AppContent() {
   const {
     currentUser,
+    planEntitlements,
     isAuthenticated,
     isAuthModalOpen,
     openAuthModal,
@@ -57,7 +71,16 @@ function AppContent() {
           .replace(/billnest/g, 'invobill')
           .replace(/Billsnest/g, 'Invobill')
           .replace(/billsnest/g, 'invobill');
-        const parsed = JSON.parse(cleansedJson);
+        const parsed: CmsContent = JSON.parse(cleansedJson);
+        if (parsed.about?.stats?.[1]?.label === 'Locked features') {
+          parsed.hero.eyebrow = defaultCmsContent.hero.eyebrow;
+          parsed.about = defaultCmsContent.about;
+          parsed.features.title = defaultCmsContent.features.title;
+          parsed.features.subtitle = defaultCmsContent.features.subtitle;
+          if (parsed.faqs?.items?.[0]) {
+            parsed.faqs.items[0] = defaultCmsContent.faqs.items[0];
+          }
+        }
         return parsed;
       }
     } catch (err) {
@@ -92,7 +115,7 @@ function AppContent() {
     return initialInvoices;
   });
 
-  const [currentView, setCurrentView] = useState<'landing' | 'studio'>('landing');
+  const [currentView, setCurrentView] = useState<'landing' | 'studio' | 'plans'>('landing');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(
     initialInvoices[0]?.id || 'inv-101'
   );
@@ -100,9 +123,17 @@ function AppContent() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [cmsAdminOpen, setCmsAdminOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailModalMode, setEmailModalMode] = useState<'invoice' | 'reminder'>('invoice');
   const [adminAuthModalOpen, setAdminAuthModalOpen] = useState(false);
   const [termsPrivacyModalOpen, setTermsPrivacyModalOpen] = useState(false);
   const [termsPrivacyTab, setTermsPrivacyTab] = useState<'privacy' | 'terms'>('privacy');
+
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlanId>('pro');
+  const [checkoutCycle, setCheckoutCycle] = useState<BillingCycle>('monthly');
+  const [checkoutCurrency, setCheckoutCurrency] = useState<PlanCurrency>('INR');
+  const [invoiceCheckoutPayload, setInvoiceCheckoutPayload] =
+    useState<InvoiceCheckoutPayload | null>(null);
 
   // Admin authentication state
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -243,10 +274,12 @@ function AppContent() {
         setTimeout(() => {
           document.getElementById('faq')?.scrollIntoView({ behavior: 'smooth' });
         }, 150);
+      } else if (path === '/plans') {
+        setCurrentView('plans');
       } else if (path === '/pricing') {
         setCurrentView('landing');
         setTimeout(() => {
-          document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+          document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
         }, 150);
       }
     };
@@ -355,7 +388,49 @@ function AppContent() {
     setCurrentView('studio');
   };
 
+  const handleOpenUpgrade = (
+    plan: SubscriptionPlanId = 'pro',
+    cycle: BillingCycle = 'monthly',
+    currency: PlanCurrency = 'INR'
+  ) => {
+    setInvoiceCheckoutPayload(null);
+    setCheckoutPlan(plan === 'free' ? 'pro' : plan);
+    setCheckoutCycle(cycle);
+    setCheckoutCurrency(currency);
+    setCheckoutModalOpen(true);
+  };
+
+  const handlePayInvoiceRazorpay = (inv: InvoiceData) => {
+    const { grandTotal } = calculateInvoiceMath(inv);
+    setInvoiceCheckoutPayload({
+      invoiceNumber: inv.invoiceNumber,
+      clientName: inv.clientName,
+      clientEmail: inv.clientEmail,
+      amountMajor: grandTotal,
+      currency: inv.currency === '$' ? 'USD' : 'INR',
+      businessName: inv.businessName || cms.brand.brandName || 'Invobill',
+      onPaymentVerified: () => {
+        handleUpdateInvoiceStatus(inv.id || inv.invoiceNumber, 'Paid');
+      },
+    });
+    setCheckoutModalOpen(true);
+  };
+
   const handleCreateNewInvoice = () => {
+    const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+    const monthlyCount = invoices.filter((inv) =>
+      (inv.issueDate || '').startsWith(currentMonthPrefix)
+    ).length;
+
+    if (
+      planEntitlements.maxInvoicesPerMonth !== null &&
+      monthlyCount >= planEntitlements.maxInvoicesPerMonth
+    ) {
+      setDashboardOpen(false);
+      handleOpenUpgrade('pro');
+      return;
+    }
+
     // Default to configured brand name and professional billing email rather than personal Google account
     const businessTitle = cms.brand.brandName || 'Invobill Studio';
     const businessEmail = cms.brand.contactEmail || 'billing@invobill.app';
@@ -377,7 +452,10 @@ function AppContent() {
       discountAmount: 0,
       discountType: 'amount',
       themeColor: cms.brand.primaryColor || '#FF5238',
-      templateStyle: 'Modern',
+      templateStyle: planEntitlements.allowedTemplates.includes('Modern')
+        ? 'Modern'
+        : 'Minimal',
+      hideWatermark: planEntitlements.removeWatermarkAllowed,
       notes: 'Thank you for your business.',
       bankDetails: cms.brand.defaultBankDetails || {
         bankName: 'HDFC Bank Ltd',
@@ -401,11 +479,23 @@ function AppContent() {
 
   const handleOpenEmailModal = (invoice: InvoiceData) => {
     setSelectedInvoiceId(invoice.id || invoice.invoiceNumber);
+    setEmailModalMode('invoice');
+    setEmailModalOpen(true);
+  };
+
+  const handleSendReminderModal = (invoice: InvoiceData) => {
+    setSelectedInvoiceId(invoice.id || invoice.invoiceNumber);
+    setEmailModalMode('reminder');
     setEmailModalOpen(true);
   };
 
   const handleEmailSuccess = (invoiceId: string) => {
-    handleUpdateInvoiceStatus(invoiceId, 'Sent');
+    const target = invoices.find(
+      (inv) => inv.id === invoiceId || inv.invoiceNumber === invoiceId
+    );
+    if (emailModalMode === 'invoice' || target?.status === 'Draft') {
+      handleUpdateInvoiceStatus(invoiceId, 'Sent');
+    }
   };
 
   const handleDownloadPdf = (invoice: InvoiceData) => {
@@ -450,12 +540,14 @@ function AppContent() {
       />
 
       {/* Universal Top Header Bar (Landing Mode) */}
-      {currentView !== 'studio' && (
+      {currentView === 'landing' && (
         <Header
           brand={cms.brand}
           onOpenCms={handleRequestOpenCms}
           onOpenGenerator={handleCreateNewInvoice}
           onOpenDashboard={() => setDashboardOpen(true)}
+          onOpenUpgrade={(plan) => handleOpenUpgrade(plan)}
+          onOpenPlans={() => setCurrentView('plans')}
           isAdminOpen={cmsAdminOpen}
           isAdminAuthenticated={isAdminAuthenticated}
           onLockAdmin={handleLockAdmin}
@@ -475,6 +567,19 @@ function AppContent() {
           onCreateNew={handleCreateNewInvoice}
           onOpenEmail={handleOpenEmailModal}
           onOpenDashboard={() => setDashboardOpen(true)}
+          onOpenUpgrade={(plan) => handleOpenUpgrade(plan)}
+          onPayInvoiceRazorpay={handlePayInvoiceRazorpay}
+        />
+      ) : currentView === 'plans' ? (
+        /* Dedicated Plans & Comparison Page */
+        <PlansPageView
+          brand={cms.brand}
+          onBackToLanding={() => setCurrentView('landing')}
+          onSelectPlan={(planId, cycle, currency) =>
+            handleOpenUpgrade(planId, cycle, currency)
+          }
+          onOpenGenerator={handleCreateNewInvoice}
+          onOpenDashboard={() => setDashboardOpen(true)}
         />
       ) : (
         /* Landing Page View */
@@ -490,6 +595,14 @@ function AppContent() {
           <FeaturesSection
             features={cms.features}
             primaryColor={cms.brand.primaryColor}
+          />
+
+          <PricingSection
+            onSelectPlan={(planId, cycle, currency) =>
+              handleOpenUpgrade(planId, cycle, currency)
+            }
+            onOpenGenerator={handleCreateNewInvoice}
+            onOpenPlansPage={() => setCurrentView('plans')}
           />
 
           <AboutSection
@@ -524,6 +637,7 @@ function AppContent() {
             onOpenCms={handleRequestOpenCms}
             onOpenGenerator={handleCreateNewInvoice}
             onOpenDashboard={() => setDashboardOpen(true)}
+            onOpenPlans={() => setCurrentView('plans')}
             onOpenPrivacy={() => {
               setTermsPrivacyTab('privacy');
               setTermsPrivacyModalOpen(true);
@@ -569,14 +683,30 @@ function AppContent() {
         onDuplicateInvoice={handleDuplicateInvoice}
         onDownloadPdf={handleDownloadPdf}
         onEmailInvoice={handleOpenEmailModal}
+        onSendReminder={handleSendReminderModal}
+        onOpenUpgrade={(plan) => handleOpenUpgrade(plan)}
       />
 
-      {/* Email Invoice Share Modal */}
+      {/* Razorpay Subscription & Invoice Checkout Modal */}
+      <SubscriptionCheckoutModal
+        isOpen={checkoutModalOpen}
+        onClose={() => {
+          setCheckoutModalOpen(false);
+          setInvoiceCheckoutPayload(null);
+        }}
+        initialPlan={checkoutPlan}
+        initialCycle={checkoutCycle}
+        initialCurrency={checkoutCurrency}
+        invoiceCheckout={invoiceCheckoutPayload}
+      />
+
+      {/* Email Invoice / Payment Reminder Share Modal */}
       <EmailModal
         isOpen={emailModalOpen}
         onClose={() => setEmailModalOpen(false)}
         invoice={activeInvoice || null}
         brand={cms.brand}
+        mode={emailModalMode}
         onSendSuccess={handleEmailSuccess}
       />
 

@@ -266,6 +266,7 @@ export const InvoiceSchema = z
     templateStyle: z.enum(["Classic", "Modern", "Minimal"]).optional(),
     bankDetails: BankDetailsSchema.optional(),
     showBankDetails: z.boolean().optional().default(true),
+    hideWatermark: z.boolean().optional().default(false),
     createdAt: z.string().optional(),
   })
   .strict();
@@ -273,6 +274,34 @@ export const InvoiceSchema = z
 export const SaveInvoicePayloadSchema = z
   .object({
     invoice: InvoiceSchema,
+  })
+  .strict();
+
+export const CreateOrderSchema = z
+  .object({
+    amount: z
+      .number()
+      .int("Amount must be an integer in smallest currency unit (paise/cents)")
+      .min(100, "Minimum order amount is 100 paise/cents"),
+    currency: z.enum(["INR", "USD"]).default("INR"),
+    receipt: z.string().trim().min(3).max(40),
+    planId: z.enum(["free", "pro", "business"]).optional(),
+    billingCycle: z.enum(["monthly", "annual"]).optional(),
+    invoiceId: z.string().trim().max(64).optional(),
+    notes: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+export const VerifyPaymentSchema = z
+  .object({
+    razorpay_order_id: z.string().trim().min(5, "Missing razorpay_order_id").max(100),
+    razorpay_payment_id: z.string().trim().min(5, "Missing razorpay_payment_id").max(100),
+    razorpay_signature: z.string().trim().min(10, "Missing razorpay_signature").max(200),
+    planId: z.enum(["free", "pro", "business"]).optional(),
+    billingCycle: z.enum(["monthly", "annual"]).optional(),
+    currency: z.enum(["INR", "USD"]).optional(),
+    amount: z.number().min(0).optional(),
+    invoiceId: z.string().trim().max(64).optional(),
   })
   .strict();
 

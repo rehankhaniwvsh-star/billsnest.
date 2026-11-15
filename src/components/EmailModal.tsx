@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { InvoiceData, BrandSettings } from '../types';
-import { X, Mail, Send, Check, Copy, AlertCircle } from 'lucide-react';
+import { X, Mail, Send, Check, Copy, AlertCircle, BellRing } from 'lucide-react';
 import { EmailInvoiceSchema, validateStrict, ValidationErrorDetail } from '../schemas/strictSchemas';
+import { calculateInvoiceMath } from '../utils/invoiceCalculations';
 
 interface EmailModalProps {
   isOpen: boolean;
   onClose: () => void;
   invoice: InvoiceData | null;
   brand: BrandSettings;
+  mode?: 'invoice' | 'reminder';
   onSendSuccess: (invoiceId: string) => void;
 }
 
@@ -16,23 +18,12 @@ export const EmailModal: React.FC<EmailModalProps> = ({
   onClose,
   invoice,
   brand,
+  mode = 'invoice',
   onSendSuccess,
 }) => {
-  const [recipient, setRecipient] = useState(invoice?.clientEmail || '');
-  const [subject, setSubject] = useState(
-    `Invoice ${invoice?.invoiceNumber || ''} from ${brand.brandName || 'Invobill'}`
-  );
-  const [message, setMessage] = useState(
-    `Hi ${invoice?.clientName || 'there'},\n\nPlease find attached your invoice ${
-      invoice?.invoiceNumber
-    } for ${invoice?.currency}${invoice?.items
-      .reduce((a, b) => a + b.quantity * b.rate, 0)
-      .toLocaleString()}.\n\nDue Date: ${invoice?.dueDate}\n\nYou can view and pay your invoice online at:\n${
-      window.location.origin
-    }/#invoice-${invoice?.invoiceNumber}\n\nThank you for your business!\nBest regards,\n${
-      brand.brandName || 'Invobill'
-    }`
-  );
+  const [recipient, setRecipient] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
 
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
@@ -40,27 +31,49 @@ export const EmailModal: React.FC<EmailModalProps> = ({
   const [validationErrors, setValidationErrors] = useState<ValidationErrorDetail[]>([]);
   const [generalError, setGeneralError] = useState<string>('');
 
-  // Sync state when invoice changes
+  // Sync state when invoice, brand, mode, or open state changes
   React.useEffect(() => {
-    if (invoice) {
-      setRecipient(invoice.clientEmail);
-      setSubject(`Invoice ${invoice.invoiceNumber} from ${brand.brandName}`);
-      const total = invoice.items.reduce((a, b) => a + b.quantity * b.rate, 0);
-      setMessage(
-        `Hi ${invoice.clientName},\n\nPlease find attached your invoice ${
-          invoice.invoiceNumber
-        } for ${invoice.currency}${total.toLocaleString()}.\n\nDue Date: ${
-          invoice.dueDate
-        }\n\nYou can review your invoice online at:\n${
-          window.location.origin
-        }/#invoice-${invoice.invoiceNumber}\n\nThank you for your business!\nBest regards,\n${
-          brand.brandName
-        }`
+    if (!invoice || !isOpen) return;
+
+    const senderName = invoice.businessName || brand.brandName || 'Invobill';
+    const { grandTotal } = calculateInvoiceMath(invoice);
+    const formattedTotal = `${invoice.currency}${grandTotal.toLocaleString()}`;
+    const invoiceUrl = `${window.location.origin}/#invoice-${invoice.invoiceNumber}`;
+
+    setRecipient(invoice.clientEmail || '');
+    setSentSuccess(false);
+    setValidationErrors([]);
+    setGeneralError('');
+
+    if (mode === 'reminder') {
+      const isOverdue = invoice.status === 'Overdue';
+      setSubject(
+        isOverdue
+          ? `Overdue Payment Reminder: Invoice ${invoice.invoiceNumber} (${formattedTotal}) from ${senderName}`
+          : `Payment Reminder: Invoice ${invoice.invoiceNumber} (${formattedTotal}) from ${senderName}`
       );
-      setValidationErrors([]);
-      setGeneralError('');
+      setMessage(
+        `Hi ${invoice.clientName || 'there'},\n\nThis is a ${
+          isOverdue ? 'gentle follow-up regarding your overdue' : 'friendly reminder regarding'
+        } invoice ${invoice.invoiceNumber} for ${formattedTotal}, which ${
+          isOverdue ? 'was due' : 'is due'
+        } on ${invoice.dueDate}.\n\nYou can review the invoice and settle the balance online here:\n${invoiceUrl}${
+          invoice.bankDetails?.upiId
+            ? `\n\nInstant UPI ID: ${invoice.bankDetails.upiId}`
+            : ''
+        }\n\nIf payment has already been sent, please disregard this reminder or reply with your transfer reference.\n\nThank you for your business!\nBest regards,\n${senderName}`
+      );
+    } else {
+      setSubject(`Invoice ${invoice.invoiceNumber} from ${senderName}`);
+      setMessage(
+        `Hi ${invoice.clientName || 'there'},\n\nPlease find attached your invoice ${
+          invoice.invoiceNumber
+        } for ${formattedTotal}.\n\nDue Date: ${
+          invoice.dueDate
+        }\n\nYou can review your invoice online at:\n${invoiceUrl}\n\nThank you for your business!\nBest regards,\n${senderName}`
+      );
     }
-  }, [invoice, brand]);
+  }, [invoice, brand, mode, isOpen]);
 
   if (!isOpen || !invoice) return null;
 
@@ -135,9 +148,15 @@ export const EmailModal: React.FC<EmailModalProps> = ({
       <div className="bg-[var(--card)] border border-[var(--border)] rounded-[var(--radius)] max-w-lg w-full shadow-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--muted)]/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Mail className="w-5 h-5 text-[var(--primary)]" />
+            {mode === 'reminder' ? (
+              <BellRing className="w-5 h-5 text-amber-600" />
+            ) : (
+              <Mail className="w-5 h-5 text-[var(--primary)]" />
+            )}
             <h3 className="font-bold text-sm text-[var(--foreground)]">
-              Email Invoice {invoice.invoiceNumber}
+              {mode === 'reminder'
+                ? `Send Payment Reminder — ${invoice.invoiceNumber}`
+                : `Email Invoice ${invoice.invoiceNumber}`}
             </h3>
           </div>
           <button
@@ -155,10 +174,14 @@ export const EmailModal: React.FC<EmailModalProps> = ({
                 <Check className="w-6 h-6" />
               </div>
               <h4 className="text-base font-bold text-[var(--foreground)]">
-                Invoice Email Sent Successfully!
+                {mode === 'reminder'
+                  ? 'Payment Reminder Sent Successfully!'
+                  : 'Invoice Email Sent Successfully!'}
               </h4>
               <p className="text-[var(--muted-foreground)]">
-                Marked invoice status as <strong>Sent</strong>.
+                {mode === 'reminder'
+                  ? `Reminder delivered to ${recipient}.`
+                  : 'Marked invoice status as Sent.'}
               </p>
             </div>
           ) : (
@@ -272,10 +295,16 @@ export const EmailModal: React.FC<EmailModalProps> = ({
                   type="button"
                   onClick={handleSend}
                   disabled={sending || !recipient.trim()}
-                  className="btn-shader-primary inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded shadow disabled:opacity-50 cursor-pointer"
+                  className="btn-shader-primary inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded shadow disabled:opacity-50 cursor-pointer whitespace-nowrap"
                 >
                   <Send className="w-3.5 h-3.5 btn-icon-hover-bounce" />
-                  <span>{sending ? 'Validating & Sending...' : 'Send Invoice Now'}</span>
+                  <span>
+                    {sending
+                      ? 'Validating & Sending...'
+                      : mode === 'reminder'
+                      ? 'Send Reminder Now'
+                      : 'Send Invoice Now'}
+                  </span>
                 </button>
               </div>
             </>

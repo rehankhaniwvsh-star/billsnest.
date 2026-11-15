@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { InvoiceData, InvoiceItem, BrandSettings } from '../types';
+import { InvoiceData, InvoiceItem, BrandSettings, SubscriptionPlanId } from '../types';
 import {
   Plus,
   Printer,
@@ -23,6 +23,10 @@ import {
   X,
   Search,
   ChevronRight,
+  Lock,
+  CreditCard,
+  Sparkles,
+  Users,
 } from 'lucide-react';
 import { downloadInvoicePdf, downloadInvoicePng } from '../utils/pdfExport';
 import { buildUpiUri, generateUpiQrDataUrl } from '../utils/upi';
@@ -30,6 +34,13 @@ import { BrandLogo } from './BrandLogo';
 import { InvoiceSchema, validateStrict, ValidationErrorDetail } from '../schemas/strictSchemas';
 import { UpiPaymentModal } from './UpiPaymentModal';
 import { calculateInvoiceMath } from '../utils/invoiceCalculations';
+import { useAuth } from '../context/AuthContext';
+import { getPlanDefinition } from '../data/subscriptionPlans';
+import {
+  ClientSuggestion,
+  buildClientSuggestions,
+  fetchPreviousClientsFromFirestore,
+} from '../services/firestoreService';
 
 interface InvoiceStudioViewProps {
   brand: BrandSettings;
@@ -42,6 +53,8 @@ interface InvoiceStudioViewProps {
   onCreateNew: () => void;
   onOpenEmail: (invoice: InvoiceData) => void;
   onOpenDashboard?: () => void;
+  onOpenUpgrade?: (plan?: SubscriptionPlanId) => void;
+  onPayInvoiceRazorpay?: (invoice: InvoiceData) => void;
 }
 
 type StudioMode = 'form' | 'customize';
@@ -115,7 +128,18 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
   onCreateNew,
   onOpenEmail,
   onOpenDashboard,
+  onOpenUpgrade,
+  onPayInvoiceRazorpay,
 }) => {
+  const { currentUser, currentPlan, planEntitlements } = useAuth();
+  const planDef = getPlanDefinition(currentPlan);
+  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const monthlyInvoiceCount = invoices.filter((inv) =>
+    (inv.issueDate || '').startsWith(currentMonthPrefix)
+  ).length;
+  const isAtFreeMonthlyLimit =
+    planEntitlements.maxInvoicesPerMonth !== null &&
+    monthlyInvoiceCount >= planEntitlements.maxInvoicesPerMonth;
   const [invoice, setInvoice] = useState<InvoiceData>(() => {
     const found = invoices.find(
       (i) => i.id === selectedInvoiceId || i.invoiceNumber === selectedInvoiceId
@@ -171,9 +195,80 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
   const [downloadingPng, setDownloadingPng] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
 
+  const [remoteClients, setRemoteClients] = useState<ClientSuggestion[]>([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [activeSuggestionIdx, setActiveSuggestionIdx] = useState(-1);
+
   const printableCardRef = useRef<HTMLDivElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const savedDrawerRef = useRef<HTMLDivElement>(null);
+  const clientSuggestRef = useRef<HTMLDivElement>(null);
+
+  // Fetch past client profiles from Firestore when authenticated
+  useEffect(() => {
+    let active = true;
+    if (!currentUser?.id) {
+      setRemoteClients([]);
+      return;
+    }
+    fetchPreviousClientsFromFirestore(currentUser.id)
+      .then((list) => {
+        if (active) setRemoteClients(list);
+      })
+      .catch(() => {
+        // Fallback smoothly to local invoices list
+      });
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id]);
+
+  // Close client suggestion dropdown on outside click
+  useEffect(() => {
+    if (!showClientSuggestions) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (clientSuggestRef.current && !clientSuggestRef.current.contains(e.target as Node)) {
+        setShowClientSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showClientSuggestions]);
+
+  const allClientSuggestions = React.useMemo(
+    () => buildClientSuggestions(invoices, remoteClients),
+    [invoices, remoteClients]
+  );
+
+  const matchingClientSuggestions = React.useMemo(() => {
+    const rawQuery = (invoice.clientName || '').trim().toLowerCase();
+    const isPlaceholder = rawQuery === 'new client' || rawQuery === 'customer name';
+    if (!rawQuery || isPlaceholder) {
+      return allClientSuggestions.slice(0, 5);
+    }
+    return allClientSuggestions
+      .filter(
+        (c) =>
+          c.clientName.toLowerCase().includes(rawQuery) ||
+          c.clientEmail.toLowerCase().includes(rawQuery) ||
+          (c.clientGst || '').toLowerCase().includes(rawQuery)
+      )
+      .slice(0, 6);
+  }, [allClientSuggestions, invoice.clientName]);
+
+  const handleApplyClientSuggestion = (client: ClientSuggestion) => {
+    setInvoice((prev) => ({
+      ...prev,
+      clientName: client.clientName,
+      clientEmail: client.clientEmail || prev.clientEmail,
+      clientPhone: client.clientPhone || '',
+      clientGst: client.clientGst || '',
+      clientAddress: client.clientAddress || '',
+    }));
+    setShowClientSuggestions(false);
+    setActiveSuggestionIdx(-1);
+    showToast(`Filled client details for ${client.clientName}`);
+  };
 
   // Sync state when selected invoice ID changes or external list updates
   useEffect(() => {
@@ -618,11 +713,33 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
             )}
           </nav>
 
-          {/* Right: Primary + New Invoice CTA */}
+          {/* Right: Plan Indicator + Primary New Invoice CTA */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={onCreateNew}
+              onClick={() => onOpenUpgrade?.(currentPlan === 'free' ? 'pro' : 'business')}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-[var(--muted)] hover:bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] transition-colors whitespace-nowrap shrink-0 cursor-pointer tabular-nums"
+              title="View or upgrade subscription plan"
+            >
+              <Sparkles className="w-3 h-3 text-[var(--primary)]" />
+              <span>
+                {planDef.name}
+                {planEntitlements.maxInvoicesPerMonth !== null
+                  ? ` · ${monthlyInvoiceCount}/${planEntitlements.maxInvoicesPerMonth}/mo`
+                  : ''}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isAtFreeMonthlyLimit && onOpenUpgrade) {
+                  showToast('Starter monthly limit (5 invoices) reached — upgrade to Pro for unlimited.');
+                  onOpenUpgrade('pro');
+                  return;
+                }
+                onCreateNew();
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--primary-foreground)] shadow-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
@@ -802,11 +919,28 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                             />
                             <button
                               type="button"
-                              onClick={() => logoFileInputRef.current?.click()}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] hover:bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] transition-colors cursor-pointer"
+                              onClick={() => {
+                                if (!planEntitlements.logoUploadAllowed && onOpenUpgrade) {
+                                  showToast('Custom logo upload is unlocked on Pro & Business plans.');
+                                  onOpenUpgrade('pro');
+                                  return;
+                                }
+                                logoFileInputRef.current?.click();
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--background)] hover:bg-[var(--muted)] border border-[var(--border)] text-[var(--foreground)] transition-colors cursor-pointer whitespace-nowrap"
                             >
-                              <Upload className="w-3.5 h-3.5" />
-                              <span>{invoice.businessLogoUrl ? 'Change Logo' : 'Upload Logo'}</span>
+                              {!planEntitlements.logoUploadAllowed ? (
+                                <Lock className="w-3.5 h-3.5 text-[var(--primary)]" />
+                              ) : (
+                                <Upload className="w-3.5 h-3.5" />
+                              )}
+                              <span>
+                                {!planEntitlements.logoUploadAllowed
+                                  ? 'Upload Logo (Pro)'
+                                  : invoice.businessLogoUrl
+                                  ? 'Change Logo'
+                                  : 'Upload Logo'}
+                              </span>
                             </button>
 
                             {invoice.businessLogoUrl && (
@@ -930,27 +1064,118 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
 
                   {activeTab === 'customer' && (
                     <div className="space-y-5">
-                      <div>
-                        <h2 className="text-sm font-bold text-[var(--foreground)]">
-                          Customer Information
-                        </h2>
-                        <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                          Client billing details shown under Bill To
-                        </p>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h2 className="text-sm font-bold text-[var(--foreground)]">
+                            Customer Information
+                          </h2>
+                          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                            Type a client name to auto-fill details from previous invoices
+                          </p>
+                        </div>
+                        {allClientSuggestions.length > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[var(--muted)] text-[10.5px] font-semibold text-[var(--muted-foreground)] tabular-nums">
+                            <Users className="w-3 h-3 text-[var(--primary)]" />
+                            <span>{allClientSuggestions.length} saved clients</span>
+                          </span>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
+                        <div className="relative" ref={clientSuggestRef}>
                           <label className={labelClass}>Customer Name</label>
                           <input
                             type="text"
                             value={invoice.clientName}
-                            placeholder="Customer Name"
-                            onChange={(e) =>
-                              setInvoice((prev) => ({ ...prev, clientName: e.target.value }))
-                            }
+                            placeholder="Start typing client name..."
+                            autoComplete="off"
+                            onFocus={() => {
+                              setShowClientSuggestions(true);
+                              setActiveSuggestionIdx(-1);
+                            }}
+                            onChange={(e) => {
+                              setInvoice((prev) => ({ ...prev, clientName: e.target.value }));
+                              setShowClientSuggestions(true);
+                              setActiveSuggestionIdx(-1);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!showClientSuggestions || matchingClientSuggestions.length === 0) {
+                                return;
+                              }
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setActiveSuggestionIdx((idx) =>
+                                  idx < matchingClientSuggestions.length - 1 ? idx + 1 : 0
+                                );
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setActiveSuggestionIdx((idx) =>
+                                  idx > 0 ? idx - 1 : matchingClientSuggestions.length - 1
+                                );
+                              } else if (e.key === 'Enter' && activeSuggestionIdx >= 0) {
+                                e.preventDefault();
+                                handleApplyClientSuggestion(
+                                  matchingClientSuggestions[activeSuggestionIdx]
+                                );
+                              } else if (e.key === 'Escape') {
+                                setShowClientSuggestions(false);
+                              }
+                            }}
                             className={inputClass}
                           />
+
+                          {/* Client Suggestions Dropdown */}
+                          {showClientSuggestions && matchingClientSuggestions.length > 0 && (
+                            <div className="absolute left-0 right-0 mt-1.5 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl z-40 overflow-hidden">
+                              <div className="px-3 py-1.5 bg-[var(--muted)]/50 border-b border-[var(--border)] flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--muted-foreground)]">
+                                <span>Previous Clients</span>
+                                <span>Click to fill</span>
+                              </div>
+                              <div className="max-h-56 overflow-y-auto divide-y divide-[var(--border)]">
+                                {matchingClientSuggestions.map((client, idx) => {
+                                  const highlighted = idx === activeSuggestionIdx;
+                                  return (
+                                    <button
+                                      key={`${client.clientName}-${client.clientEmail}-${idx}`}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleApplyClientSuggestion(client);
+                                      }}
+                                      className={`w-full px-3 py-2 text-left transition-colors cursor-pointer flex items-start justify-between gap-2 ${
+                                        highlighted
+                                          ? 'bg-[var(--accent)]'
+                                          : 'hover:bg-[var(--muted)]/60'
+                                      }`}
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="text-xs font-bold text-[var(--foreground)] truncate">
+                                          {client.clientName}
+                                        </div>
+                                        {client.clientEmail && (
+                                          <div className="text-[11px] text-[var(--muted-foreground)] truncate">
+                                            {client.clientEmail}
+                                            {client.clientPhone ? ` • ${client.clientPhone}` : ''}
+                                          </div>
+                                        )}
+                                        {client.clientAddress && (
+                                          <div className="text-[10px] text-[var(--muted-foreground)]/80 truncate mt-0.5">
+                                            {client.clientAddress}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {client.lastInvoiceNumber && (
+                                        <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)] shrink-0">
+                                          {client.lastInvoiceNumber}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <div>
@@ -1531,17 +1756,35 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
 
                 {/* Theme Swatches */}
                 <div className="space-y-2.5">
-                  <label className={labelClass}>Brand Theme Color</label>
+                  <div className="flex items-center justify-between">
+                    <label className={labelClass}>Brand Theme Color</label>
+                    {!planEntitlements.customColorsAllowed && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenUpgrade?.('pro')}
+                        className="text-[10.5px] font-bold text-[var(--primary)] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Lock className="w-3 h-3" />
+                        <span>Custom colors on Pro</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    {THEME_SWATCHES.map((swatch) => {
+                    {THEME_SWATCHES.map((swatch, idx) => {
                       const active = themeHex.toLowerCase() === swatch.hex.toLowerCase();
+                      const locked = !planEntitlements.customColorsAllowed && idx > 0;
                       return (
                         <button
                           key={swatch.hex}
                           type="button"
-                          onClick={() =>
-                            setInvoice((prev) => ({ ...prev, themeColor: swatch.hex }))
-                          }
+                          onClick={() => {
+                            if (locked && onOpenUpgrade) {
+                              showToast('Custom brand colors are included in Pro.');
+                              onOpenUpgrade('pro');
+                              return;
+                            }
+                            setInvoice((prev) => ({ ...prev, themeColor: swatch.hex }));
+                          }}
                           className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
                             active
                               ? 'border-[var(--primary)] bg-[var(--accent)] text-[var(--foreground)]'
@@ -1553,6 +1796,7 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                             style={{ backgroundColor: swatch.hex }}
                           />
                           <span>{swatch.name}</span>
+                          {locked && <Lock className="w-3 h-3 opacity-60" />}
                         </button>
                       );
                     })}
@@ -1562,18 +1806,20 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                     <input
                       type="color"
                       value={themeHex}
+                      disabled={!planEntitlements.customColorsAllowed}
                       onChange={(e) =>
                         setInvoice((prev) => ({ ...prev, themeColor: e.target.value }))
                       }
-                      className="w-9 h-9 rounded-lg border border-[var(--border)] cursor-pointer bg-transparent p-0.5"
+                      className="w-9 h-9 rounded-lg border border-[var(--border)] cursor-pointer bg-transparent p-0.5 disabled:opacity-50"
                     />
                     <input
                       type="text"
                       value={themeHex}
+                      disabled={!planEntitlements.customColorsAllowed}
                       onChange={(e) =>
                         setInvoice((prev) => ({ ...prev, themeColor: e.target.value }))
                       }
-                      className={`${inputClass} max-w-[140px] font-mono uppercase`}
+                      className={`${inputClass} max-w-[140px] font-mono uppercase disabled:opacity-50`}
                     />
                   </div>
                 </div>
@@ -1584,20 +1830,29 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                   <div className="grid grid-cols-3 gap-2.5">
                     {(['Modern', 'Classic', 'Minimal'] as const).map((tpl) => {
                       const active = templateStyle === tpl;
+                      const locked = !planEntitlements.allowedTemplates.includes(tpl);
                       return (
                         <button
                           key={tpl}
                           type="button"
-                          onClick={() =>
-                            setInvoice((prev) => ({ ...prev, templateStyle: tpl }))
-                          }
+                          onClick={() => {
+                            if (locked && onOpenUpgrade) {
+                              showToast(`${tpl} layout unlocks on Pro & Business plans.`);
+                              onOpenUpgrade('pro');
+                              return;
+                            }
+                            setInvoice((prev) => ({ ...prev, templateStyle: tpl }));
+                          }}
                           className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                             active
                               ? 'border-[var(--primary)] bg-[var(--accent)] text-[var(--foreground)]'
                               : 'border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                           }`}
                         >
-                          <div className="text-xs font-bold">{tpl}</div>
+                          <div className="flex items-center justify-between gap-1 text-xs font-bold">
+                            <span>{tpl}</span>
+                            {locked && <Lock className="w-3 h-3 text-[var(--primary)]" />}
+                          </div>
                           <div className="text-[10px] opacity-80 mt-0.5">
                             {tpl === 'Modern'
                               ? 'Colored banner'
@@ -1612,7 +1867,7 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                 </div>
 
                 {/* Toggle Payment Box */}
-                <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+                <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-3">
                   <div>
                     <div className="text-xs font-bold text-[var(--foreground)]">
                       Show Bank Wire & UPI QR Box
@@ -1629,13 +1884,56 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                         showBankDetails: prev.showBankDetails === false ? true : false,
                       }))
                     }
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer shrink-0 ${
                       invoice.showBankDetails !== false
                         ? 'bg-[var(--primary)] text-white border-[var(--primary)]'
                         : 'bg-[var(--background)] text-[var(--muted-foreground)] border-[var(--border)]'
                     }`}
                   >
                     {invoice.showBankDetails !== false ? 'Visible' : 'Hidden'}
+                  </button>
+                </div>
+
+                {/* Toggle White-Label Footer */}
+                <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-[var(--foreground)] flex items-center gap-1.5">
+                      <span>White-Label PDF &amp; PNG</span>
+                      {!planEntitlements.removeWatermarkAllowed && (
+                        <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--primary)]">
+                          Pro
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[var(--muted-foreground)]">
+                      Remove &ldquo;Powered by Invobill&rdquo; footer from downloaded documents
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!planEntitlements.removeWatermarkAllowed && onOpenUpgrade) {
+                        showToast('White-label exports are unlocked on Pro & Business plans.');
+                        onOpenUpgrade('pro');
+                        return;
+                      }
+                      setInvoice((prev) => ({
+                        ...prev,
+                        hideWatermark: !prev.hideWatermark,
+                      }));
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer shrink-0 inline-flex items-center gap-1.5 ${
+                      invoice.hideWatermark && planEntitlements.removeWatermarkAllowed
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-[var(--background)] text-[var(--muted-foreground)] border-[var(--border)]'
+                    }`}
+                  >
+                    {!planEntitlements.removeWatermarkAllowed && <Lock className="w-3 h-3" />}
+                    <span>
+                      {invoice.hideWatermark && planEntitlements.removeWatermarkAllowed
+                        ? 'White-Label'
+                        : 'Show Footer'}
+                    </span>
                   </button>
                 </div>
 
@@ -1740,6 +2038,33 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                   <Mail className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Email</span>
                 </button>
+
+                {onPayInvoiceRazorpay && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!planEntitlements.razorpayCheckoutAllowed && onOpenUpgrade) {
+                        showToast('Online Razorpay invoice checkout requires the Business plan.');
+                        onOpenUpgrade('business');
+                        return;
+                      }
+                      onPayInvoiceRazorpay(invoice);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#111116] hover:bg-[#23232e] text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    title={
+                      planEntitlements.razorpayCheckoutAllowed
+                        ? 'Collect online payment via Razorpay Checkout'
+                        : 'Unlock Razorpay invoice checkout on Business plan'
+                    }
+                  >
+                    {!planEntitlements.razorpayCheckoutAllowed ? (
+                      <Lock className="w-3 h-3 text-amber-400" />
+                    ) : (
+                      <CreditCard className="w-3.5 h-3.5 text-orange-400" />
+                    )}
+                    <span>Pay Online</span>
+                  </button>
+                )}
 
                 {invoice.bankDetails?.upiId && (
                   <button
@@ -2246,10 +2571,12 @@ export const InvoiceStudioView: React.FC<InvoiceStudioViewProps> = ({
                   </div>
                 )}
 
-                {/* Footer Watermark */}
-                <div className="text-center pt-3 border-t border-slate-100 text-[10.5px] text-slate-400">
-                  Powered by {brand.brandName || 'Invobill'} • Professional Branded Invoicing
-                </div>
+                {/* Footer Watermark (Respects White-Label setting on Pro/Business) */}
+                {!(invoice.hideWatermark && planEntitlements.removeWatermarkAllowed) && (
+                  <div className="text-center pt-3 border-t border-slate-100 text-[10.5px] text-slate-400">
+                    Powered by {brand.brandName || 'Invobill'} • Professional Branded Invoicing
+                  </div>
+                )}
               </div>
             </div>
           </div>

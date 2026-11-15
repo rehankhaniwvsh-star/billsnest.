@@ -11,26 +11,50 @@ import {
   deleteDoc,
   collection,
   onSnapshot,
-  serverTimestamp,
 } from 'firebase/firestore';
-import { InvoiceData, UserAccount } from '../types';
+import {
+  auth,
+} from '../lib/firebase';
+import {
+  InvoiceData,
+  SubscriptionPaymentRecord,
+  UserAccount,
+} from '../types';
 
 /**
- * Sync user profile to Firestore
+ * Sync user profile (including active subscription tier) to Firestore
  */
 export async function syncUserProfileToFirestore(user: UserAccount): Promise<void> {
   const path = `users/${user.id}`;
   try {
     const userDocRef = doc(db, 'users', user.id);
-    const cleanPayload = {
+    const cleanPayload: Record<string, any> = {
       uid: user.id,
       email: user.email,
       displayName: user.name || '',
       photoURL: user.avatarUrl || '',
       companyName: user.companyName || '',
+      plan: user.plan || 'free',
+      billingCycle: user.billingCycle || 'monthly',
+      subscriptionStatus: user.subscriptionStatus || 'active',
+      subscriptionCurrency: user.subscriptionCurrency || 'INR',
       createdAt: user.createdAt || new Date().toISOString(),
       lastLoginAt: user.lastLoginAt || new Date().toISOString(),
     };
+
+    if (user.subscriptionStartedAt) {
+      cleanPayload.subscriptionStartedAt = user.subscriptionStartedAt;
+    }
+    if (user.subscriptionExpiresAt) {
+      cleanPayload.subscriptionExpiresAt = user.subscriptionExpiresAt;
+    }
+    if (user.lastPaymentId) {
+      cleanPayload.lastPaymentId = user.lastPaymentId;
+    }
+    if (user.lastOrderId) {
+      cleanPayload.lastOrderId = user.lastOrderId;
+    }
+
     await setDoc(userDocRef, cleanPayload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -38,7 +62,7 @@ export async function syncUserProfileToFirestore(user: UserAccount): Promise<voi
 }
 
 /**
- * Fetch user profile from Firestore
+ * Fetch user profile (and subscription state) from Firestore
  */
 export async function fetchUserProfileFromFirestore(userId: string): Promise<UserAccount | null> {
   const path = `users/${userId}`;
@@ -56,10 +80,45 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
       createdAt: data.createdAt || new Date().toISOString(),
       lastLoginAt: data.lastLoginAt || new Date().toISOString(),
       companyName: data.companyName,
+      plan: data.plan || 'free',
+      billingCycle: data.billingCycle || 'monthly',
+      subscriptionStatus: data.subscriptionStatus || 'active',
+      subscriptionCurrency: data.subscriptionCurrency || 'INR',
+      subscriptionStartedAt: data.subscriptionStartedAt,
+      subscriptionExpiresAt: data.subscriptionExpiresAt,
+      lastPaymentId: data.lastPaymentId,
+      lastOrderId: data.lastOrderId,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
     return null;
+  }
+}
+
+/**
+ * Record an immutable verified Razorpay subscription payment under /users/{userId}/payments/{paymentId}
+ */
+export async function recordSubscriptionPaymentToFirestore(
+  userId: string,
+  payment: SubscriptionPaymentRecord
+): Promise<void> {
+  const safeId = (payment.paymentId || payment.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const path = `users/${userId}/payments/${safeId}`;
+  try {
+    const paymentRef = doc(db, 'users', userId, 'payments', safeId);
+    await setDoc(paymentRef, {
+      userId,
+      orderId: payment.orderId,
+      paymentId: payment.paymentId,
+      planId: payment.planId,
+      billingCycle: payment.billingCycle,
+      currency: payment.currency,
+      amount: payment.amount,
+      status: 'verified',
+      createdAt: payment.createdAt || new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
 
@@ -105,6 +164,7 @@ export async function saveInvoiceToFirestore(
       items: invoice.items || [],
       bankDetails: invoice.bankDetails || {},
       showBankDetails: invoice.showBankDetails ?? true,
+      hideWatermark: invoice.hideWatermark ?? false,
       createdAt: invoice.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -150,7 +210,9 @@ export function subscribeToUserInvoices(
             id: docSnap.id,
             businessName: d.businessName || '',
             businessEmail: d.businessEmail || '',
-            businessLogoLetter: d.businessLogoLetter || (d.businessName ? d.businessName.charAt(0).toUpperCase() : 'I'),
+            businessLogoLetter:
+              d.businessLogoLetter ||
+              (d.businessName ? d.businessName.charAt(0).toUpperCase() : 'I'),
             businessLogoUrl: d.businessLogoUrl || '',
             ownerName: d.ownerName || '',
             gstNumber: d.gstNumber || '',
@@ -177,6 +239,7 @@ export function subscribeToUserInvoices(
             templateStyle: d.templateStyle || 'Modern',
             bankDetails: d.bankDetails || {},
             showBankDetails: d.showBankDetails ?? true,
+            hideWatermark: d.hideWatermark ?? false,
             createdAt: d.createdAt,
           });
         });
@@ -190,5 +253,112 @@ export function subscribeToUserInvoices(
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
     return () => {};
+  }
+}
+
+export interface ClientSuggestion {
+  clientName: string;
+  clientEmail: string;
+  clientPhone?: string;
+  clientGst?: string;
+  clientAddress?: string;
+  lastInvoiceNumber?: string;
+  lastIssueDate?: string;
+  source: 'firestore' | 'local';
+}
+
+const GENERIC_CLIENT_NAMES = new Set(['new client', 'customer name', 'client', 'valued client']);
+
+/**
+ * Deduplicate and merge client profiles from local invoices and Firestore records
+ */
+export function buildClientSuggestions(
+  localInvoices: InvoiceData[],
+  remoteClients: ClientSuggestion[] = []
+): ClientSuggestion[] {
+  const byKey = new Map<string, ClientSuggestion>();
+
+  const upsert = (entry: ClientSuggestion) => {
+    const cleanName = (entry.clientName || '').trim();
+    if (!cleanName || GENERIC_CLIENT_NAMES.has(cleanName.toLowerCase())) {
+      return;
+    }
+    const cleanEmail = (entry.clientEmail || '').trim();
+    const key = `${cleanName.toLowerCase()}::${cleanEmail.toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        ...entry,
+        clientName: cleanName,
+        clientEmail: cleanEmail,
+      });
+      return;
+    }
+
+    byKey.set(key, {
+      clientName: cleanName,
+      clientEmail: existing.clientEmail || cleanEmail,
+      clientPhone: existing.clientPhone || entry.clientPhone,
+      clientGst: existing.clientGst || entry.clientGst,
+      clientAddress: existing.clientAddress || entry.clientAddress,
+      lastInvoiceNumber: existing.lastInvoiceNumber || entry.lastInvoiceNumber,
+      lastIssueDate:
+        (existing.lastIssueDate || '') >= (entry.lastIssueDate || '')
+          ? existing.lastIssueDate
+          : entry.lastIssueDate,
+      source: existing.source === 'firestore' ? 'firestore' : entry.source,
+    });
+  };
+
+  remoteClients.forEach(upsert);
+  localInvoices.forEach((inv) => {
+    upsert({
+      clientName: inv.clientName || '',
+      clientEmail: inv.clientEmail || '',
+      clientPhone: inv.clientPhone || '',
+      clientGst: inv.clientGst || '',
+      clientAddress: inv.clientAddress || '',
+      lastInvoiceNumber: inv.invoiceNumber,
+      lastIssueDate: inv.issueDate || inv.createdAt || '',
+      source: 'local',
+    });
+  });
+
+  return Array.from(byKey.values()).sort((a, b) =>
+    (b.lastIssueDate || '').localeCompare(a.lastIssueDate || '')
+  );
+}
+
+/**
+ * Fetch unique client details from a user's previous Firestore invoices
+ */
+export async function fetchPreviousClientsFromFirestore(
+  userId: string
+): Promise<ClientSuggestion[]> {
+  if (!userId || !auth.currentUser || auth.currentUser.uid !== userId) {
+    return [];
+  }
+  const path = `users/${userId}/invoices`;
+  try {
+    const colRef = collection(db, 'users', userId, 'invoices');
+    const snapshot = await getDocs(colRef);
+    const items: ClientSuggestion[] = [];
+    snapshot.forEach((docSnap) => {
+      const d = docSnap.data();
+      items.push({
+        clientName: d.clientName || '',
+        clientEmail: d.clientEmail || '',
+        clientPhone: d.clientPhone || '',
+        clientGst: d.clientGst || '',
+        clientAddress: d.clientAddress || '',
+        lastInvoiceNumber: d.invoiceNumber || docSnap.id,
+        lastIssueDate: d.issueDate || d.updatedAt || d.createdAt || '',
+        source: 'firestore',
+      });
+    });
+    return buildClientSuggestions([], items);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
   }
 }

@@ -110,6 +110,22 @@ export interface CmsContent {
   lastUpdated: string;
 }
 
+export type SubscriptionPlanId = 'free' | 'pro' | 'business';
+export type BillingCycle = 'monthly' | 'annual';
+export type PlanCurrency = 'INR' | 'USD';
+
+export interface SubscriptionPaymentRecord {
+  id: string;
+  orderId: string;
+  paymentId: string;
+  planId: SubscriptionPlanId;
+  billingCycle: BillingCycle;
+  currency: PlanCurrency;
+  amount: number; // in major currency units (e.g., 199 or 4.99)
+  status: 'verified';
+  createdAt: string;
+}
+
 export interface UserAccount {
   id: string;
   email: string;
@@ -123,6 +139,14 @@ export interface UserAccount {
   role?: string;
   onboardingCompleted?: boolean;
   password?: string;
+  plan?: SubscriptionPlanId;
+  billingCycle?: BillingCycle;
+  subscriptionStatus?: 'active' | 'trialing' | 'cancelled';
+  subscriptionCurrency?: PlanCurrency;
+  subscriptionStartedAt?: string;
+  subscriptionExpiresAt?: string;
+  lastPaymentId?: string;
+  lastOrderId?: string;
   [key: string]: any;
 }
 
@@ -177,5 +201,6 @@ export interface InvoiceData {
   templateStyle?: 'Classic' | 'Modern' | 'Minimal';
   bankDetails?: BankDetails;
   showBankDetails?: boolean;
+  hideWatermark?: boolean;
   createdAt?: string;
 }

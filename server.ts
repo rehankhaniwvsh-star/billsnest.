@@ -1,5 +1,8 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
+import crypto from "crypto";
+import Razorpay from "razorpay";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { rateLimiterService } from "./server/rateLimiter";
@@ -15,6 +18,8 @@ import {
   CmsSavePayloadSchema,
   RateLimitConfigSchema,
   EmailInvoiceSchema,
+  CreateOrderSchema,
+  VerifyPaymentSchema,
 } from "./src/schemas/strictSchemas";
 
 async function startServer() {
@@ -179,7 +184,7 @@ async function startServer() {
         path: "/pricing",
         priority: "0.8",
         changefreq: "monthly",
-        title: "Free Invoicing — 100% Free Forever, No Hidden Subscriptions",
+        title: "Plans & Pricing — Starter Free, Pro & Business Tiers",
       },
       {
         path: "/about",
@@ -787,6 +792,148 @@ Provide clear, factual, actionable data with specific numbers, effective dates, 
         success: true,
         message: "CMS settings strictly validated and saved successfully",
         savedAt: new Date().toISOString(),
+      });
+    }
+  );
+
+  // -------------------------------------------------------------
+  // 3B. RAZORPAY CHECKOUT: CREATE ORDER & VERIFY SIGNATURE
+  // -------------------------------------------------------------
+  app.post(
+    "/api/create-order",
+    authenticatedLimiter,
+    validateBody(CreateOrderSchema),
+    async (req, res) => {
+      const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+      if (!keyId || !keySecret) {
+        return res.status(401).json({
+          success: false,
+          error: "Razorpay credentials are not configured on the server.",
+          code: "RAZORPAY_AUTH_MISSING",
+        });
+      }
+
+      try {
+        const { amount, currency, receipt, planId, billingCycle, invoiceId, notes } = req.body;
+
+        if (!Number.isInteger(amount) || amount < 100) {
+          return res.status(400).json({
+            success: false,
+            error: "Order amount must be at least 100 paise/cents.",
+            code: "INVALID_ORDER_AMOUNT",
+          });
+        }
+
+        const razorpay = new Razorpay({
+          key_id: keyId,
+          key_secret: keySecret,
+        });
+
+        const order = await razorpay.orders.create({
+          amount,
+          currency: currency || "INR",
+          receipt,
+          notes: {
+            ...(notes || {}),
+            ...(planId ? { planId } : {}),
+            ...(billingCycle ? { billingCycle } : {}),
+            ...(invoiceId ? { invoiceId } : {}),
+          },
+        });
+
+        return res.json({
+          success: true,
+          order_id: order.id,
+          amount: order.amount,
+          currency: order.currency,
+          key_id: keyId,
+        });
+      } catch (error: any) {
+        const statusCode = error?.statusCode;
+        if (statusCode === 401) {
+          return res.status(401).json({
+            success: false,
+            error: "Razorpay authentication failed. Check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+            code: "RAZORPAY_AUTH_FAILED",
+          });
+        }
+        return handleServerError(
+          error,
+          req,
+          res,
+          error?.error?.description || "Unable to create Razorpay order. Please try again.",
+          500
+        );
+      }
+    }
+  );
+
+  app.post(
+    "/api/verify-payment",
+    authenticatedLimiter,
+    validateBody(VerifyPaymentSchema),
+    (req, res) => {
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (!keySecret) {
+        return res.status(401).json({
+          success: false,
+          error: "Razorpay secret key is not configured on the server.",
+          code: "RAZORPAY_AUTH_MISSING",
+        });
+      }
+
+      const {
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+        planId,
+        billingCycle,
+        currency,
+        amount,
+        invoiceId,
+      } = req.body;
+
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing Razorpay payment verification fields.",
+          code: "MISSING_PAYMENT_FIELDS",
+        });
+      }
+
+      const expectedSignature = crypto
+        .createHmac("sha256", keySecret)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
+
+      const expectedBuf = Buffer.from(expectedSignature, "utf8");
+      const actualBuf = Buffer.from(razorpay_signature, "utf8");
+      const isValid =
+        expectedBuf.length === actualBuf.length &&
+        crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+      if (!isValid) {
+        return res.status(400).json({
+          success: false,
+          verified: false,
+          error: "Payment signature verification failed. Payment not confirmed.",
+          code: "SIGNATURE_MISMATCH",
+        });
+      }
+
+      return res.json({
+        success: true,
+        verified: true,
+        order_id: razorpay_order_id,
+        payment_id: razorpay_payment_id,
+        planId: planId || null,
+        billingCycle: billingCycle || null,
+        currency: currency || "INR",
+        amount: amount ?? null,
+        invoiceId: invoiceId || null,
+        verifiedAt: new Date().toISOString(),
       });
     }
   );

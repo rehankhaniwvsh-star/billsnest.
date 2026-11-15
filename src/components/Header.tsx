@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BrandSettings } from '../types';
-import { SlidersHorizontal, Sparkles, Menu, X, ArrowRight, Lock, Unlock, LogOut, User, ChevronDown, CheckCircle, LayoutDashboard } from 'lucide-react';
+import { BrandSettings, SubscriptionPlanId } from '../types';
+import { SlidersHorizontal, Sparkles, Menu, X, ArrowRight, Lock, Unlock, LogOut, User, ChevronDown, CheckCircle, LayoutDashboard, CreditCard } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { MorphingMascot } from './MorphingMascot';
 import { useAuth } from '../context/AuthContext';
+import { getPlanDefinition } from '../data/subscriptionPlans';
 
 interface HeaderProps {
   brand: BrandSettings;
   onOpenCms: () => void;
   onOpenGenerator: () => void;
   onOpenDashboard: () => void;
+  onOpenUpgrade: (plan?: SubscriptionPlanId) => void;
+  onOpenPlans: () => void;
   isAdminOpen: boolean;
   isAdminAuthenticated: boolean;
   onLockAdmin: () => void;
@@ -20,6 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCms,
   onOpenGenerator,
   onOpenDashboard,
+  onOpenUpgrade,
+  onOpenPlans,
   isAdminOpen,
   isAdminAuthenticated,
   onLockAdmin,
@@ -28,7 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { currentUser, isAuthenticated, signOut, openAuthModal } = useAuth();
+  const { currentUser, currentPlan, isAuthenticated, signOut, openAuthModal } = useAuth();
+  const planDef = getPlanDefinition(currentPlan);
   const showAdminPublicly = brand.showAdminButtonInHeader ?? false;
 
   // Close user dropdown on outside click
@@ -56,31 +62,38 @@ export const Header: React.FC<HeaderProps> = ({
         </a>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-7">
+        <nav className="hidden md:flex items-center gap-6">
           <a
             href="#features"
-            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap shrink-0"
           >
             Features
           </a>
+          <button
+            type="button"
+            onClick={onOpenPlans}
+            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            Plans
+          </button>
           <a
             href="#how-it-works"
-            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap shrink-0"
           >
             How it works
           </a>
           <a
             href="#faq"
-            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors whitespace-nowrap shrink-0"
           >
             FAQ
           </a>
           <button
             onClick={onOpenDashboard}
-            className="text-sm font-semibold text-[var(--primary)] hover:opacity-80 flex items-center gap-1.5 cursor-pointer"
+            className="text-sm font-semibold text-[var(--primary)] hover:opacity-80 flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
           >
             <span>Dashboard</span>
-            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-orange-500/10 text-orange-600 rounded-full">
+            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-orange-500/10 text-orange-600 rounded-md">
               Live
             </span>
           </button>
@@ -128,12 +141,12 @@ export const Header: React.FC<HeaderProps> = ({
               {userDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 z-50 animate-fadeIn">
                   <div className="p-3 border-b border-zinc-100 dark:border-zinc-800 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100 truncate">
                         {currentUser.name}
                       </span>
-                      <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Active
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20 shrink-0">
+                        {planDef.name}
                       </span>
                     </div>
                     <div className="text-[11px] text-zinc-500 font-mono truncate">
@@ -157,6 +170,17 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <LayoutDashboard className="w-3.5 h-3.5 text-orange-500" />
                       <span>Open Invoices Dashboard</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        onOpenUpgrade(currentPlan === 'business' ? 'business' : 'pro');
+                      }}
+                      className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{currentPlan === 'free' ? 'Upgrade to Pro / Business' : 'Manage Subscription Plan'}</span>
                     </button>
 
                     <button
@@ -280,6 +304,16 @@ export const Header: React.FC<HeaderProps> = ({
           >
             Features
           </a>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              onOpenPlans();
+            }}
+            className="block w-full text-left text-sm font-medium text-[var(--foreground)] py-1.5 cursor-pointer"
+          >
+            Plans
+          </button>
           <a
             href="#how-it-works"
             onClick={() => setMobileMenuOpen(false)}

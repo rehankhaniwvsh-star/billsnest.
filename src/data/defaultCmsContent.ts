@@ -23,7 +23,7 @@ export const defaultCmsContent: CmsContent = {
     },
   },
   hero: {
-    eyebrow: 'Free · No card required',
+    eyebrow: 'Starter Free · Upgrade Anytime',
     headlineMain: 'Invoicing that makes your business look',
     headlineAccent: 'as good as it is.',
     subheadline: 'Branded, trackable invoices for freelancers, creators, and agencies — built to feel like a real product, not a spreadsheet.',
@@ -45,18 +45,18 @@ export const defaultCmsContent: CmsContent = {
   about: {
     eyebrow: 'About Invobill',
     title: 'Built for people who invoice on their own.',
-    paragraph1: 'Invobill started from a simple frustration: most free invoicing tools look like spreadsheets wearing a logo. Freelancers, creators, and small agencies deserve invoices that look like they came from a real, established business — without paying for a "professional" plan to get there.',
-    paragraph2: 'So every account gets the full toolkit — branded PDFs, share links, payment tracking, recurring billing — free, from day one. No upsells, no watermarks, no "upgrade to remove branding".',
+    paragraph1: 'Invobill started from a simple frustration: most free invoicing tools look like spreadsheets wearing a logo. Freelancers, creators, and studios deserve invoices that look like they came from an established business — starting free on day one.',
+    paragraph2: 'Begin on our generous Starter plan at ₹0 / $0 with crisp PDF & PNG downloads and UPI QR codes, or upgrade cleanly to Pro or Business when you want white-label branding, cloud sync, Razorpay checkout, and GST accounting exports.',
     stats: [
-      { id: '1', number: '100%', label: 'Free, always' },
-      { id: '2', number: '0', label: 'Locked features' },
+      { id: '1', number: '₹0', label: 'Starter plan forever' },
+      { id: '2', number: '3', label: 'Flexible tiers' },
       { id: '3', number: '2 min', label: 'To your first invoice' },
       { id: '4', number: '24/7', label: 'Client access to invoices' },
     ],
   },
   features: {
-    title: 'Everything included. Nothing gated.',
-    subtitle: 'No tiers, no locked features. Every account gets the full toolkit from day one.',
+    title: 'Everything you need to get paid faster.',
+    subtitle: 'Start free with essential invoicing and UPI QR, then unlock white-label branding, cloud sync, and Razorpay checkout as you grow.',
     items: [
       {
         id: 'feat-1',
@@ -142,8 +142,8 @@ export const defaultCmsContent: CmsContent = {
     items: [
       {
         id: 'faq-1',
-        question: 'Is Invobill really free?',
-        answer: 'Yes. Every account gets unlimited invoices, all templates, and every feature — there are no paid tiers or locked features.',
+        question: 'Can I start using Invobill for free?',
+        answer: 'Yes. The Starter plan is ₹0 / $0 forever with up to 5 invoices per month, 3 saved clients, PDF & PNG export, GST/TDS math, and scannable UPI QR codes. Upgrade to Pro (₹199/mo) or Business (₹499/mo) anytime for unlimited invoices and white-label PDFs.',
         category: 'Pricing',
       },
       {

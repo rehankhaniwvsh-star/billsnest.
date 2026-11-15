@@ -8,6 +8,7 @@ interface FooterProps {
   onOpenCms: () => void;
   onOpenGenerator: () => void;
   onOpenDashboard?: () => void;
+  onOpenPlans?: () => void;
   onOpenPrivacy?: () => void;
   onOpenTerms?: () => void;
   isAdminAuthenticated?: boolean;
@@ -18,6 +19,7 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenCms,
   onOpenGenerator,
   onOpenDashboard,
+  onOpenPlans,
   onOpenPrivacy,
   onOpenTerms,
   isAdminAuthenticated = false,
@@ -51,6 +53,21 @@ export const Footer: React.FC<FooterProps> = ({
                 <a href="#features" className="hover:text-[var(--foreground)] transition-colors">
                   Features
                 </a>
+              </li>
+              <li>
+                {onOpenPlans ? (
+                  <button
+                    type="button"
+                    onClick={onOpenPlans}
+                    className="hover:text-[var(--foreground)] transition-colors text-left cursor-pointer"
+                  >
+                    Plans &amp; Pricing
+                  </button>
+                ) : (
+                  <a href="#pricing" className="hover:text-[var(--foreground)] transition-colors">
+                    Plans &amp; Pricing
+                  </a>
+                )}
               </li>
               <li>
                 <a href="#how-it-works" className="hover:text-[var(--foreground)] transition-colors">
