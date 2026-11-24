@@ -116,6 +116,38 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
     ? formatPlanCurrency(invoiceCheckout.amountMajor, invoiceCheckout.currency)
     : formatPlanCurrency(planDef.pricing[currency][billingCycle], currency);
 
+  const ensureRazorpayScriptLoaded = (): Promise<boolean> => {
+    if (typeof window.Razorpay === 'function') {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const existing = document.querySelector<HTMLScriptElement>(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      );
+      if (existing) {
+        let checks = 0;
+        const timer = window.setInterval(() => {
+          checks += 1;
+          if (typeof window.Razorpay === 'function') {
+            window.clearInterval(timer);
+            resolve(true);
+          } else if (checks >= 25) {
+            window.clearInterval(timer);
+            resolve(false);
+          }
+        }, 120);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(typeof window.Razorpay === 'function');
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleRazorpayPay = async () => {
     setErrorMsg(null);
 
@@ -124,14 +156,16 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
       return;
     }
 
-    if (typeof window.Razorpay !== 'function') {
+    setIsProcessing(true);
+
+    const scriptReady = await ensureRazorpayScriptLoaded();
+    if (!scriptReady || typeof window.Razorpay !== 'function') {
       setErrorMsg(
         'Razorpay checkout script is unavailable right now. Please check your connection or disable script blockers.'
       );
+      setIsProcessing(false);
       return;
     }
-
-    setIsProcessing(true);
 
     try {
       const receipt = isInvoiceMode
@@ -161,6 +195,9 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
           amount: orderAmountMinor,
           currency: orderCurrency,
           receipt,
+          ...(isInvoiceMode
+            ? { invoiceId: invoiceCheckout.invoiceNumber }
+            : { planId: selectedPlan, billingCycle }),
           notes: isInvoiceMode
             ? {
                 type: 'invoice_payment',
@@ -192,6 +229,8 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
         return;
       }
 
+      let paymentHandled = false;
+
       const rzp = new window.Razorpay({
         key: keyId,
         amount: orderData.amount,
@@ -212,8 +251,10 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
         },
         modal: {
           ondismiss: () => {
-            setIsProcessing(false);
-            setErrorMsg('Checkout cancelled. No amount was charged.');
+            if (!paymentHandled) {
+              setIsProcessing(false);
+              setErrorMsg('Checkout cancelled. No amount was charged.');
+            }
           },
         },
         handler: async (response: {
@@ -221,6 +262,7 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
           razorpay_order_id: string;
           razorpay_signature: string;
         }) => {
+          paymentHandled = true;
           try {
             const verifyRes = await fetch('/api/verify-payment', {
               method: 'POST',
@@ -229,6 +271,11 @@ export const SubscriptionCheckoutModal: React.FC<SubscriptionCheckoutModalProps>
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
+                currency: orderCurrency,
+                amount: orderAmountMinor,
+                ...(isInvoiceMode
+                  ? { invoiceId: invoiceCheckout.invoiceNumber }
+                  : { planId: selectedPlan, billingCycle }),
               }),
             });
 

@@ -71,11 +71,20 @@ export interface BrandSettings {
   accentColor: string;  // e.g. #E8DCC8
   backgroundColor: string; // e.g. #FBF9F6
   contactEmail: string;
+  instagramHandle?: string; // e.g. invobill.official
   logoLetter: string;
   googleSiteVerification?: string; // Google Search Console code or full meta content
   adminPin?: string; // Secret security PIN for CMS Admin panel (default: 1234)
   showAdminButtonInHeader?: boolean; // Whether the CMS Admin button is visible publicly in the header
   defaultBankDetails?: BankDetails;
+}
+
+export interface FooterRatingEntry {
+  id: string;
+  rating: number; // 1 to 5
+  message: string;
+  authorName: string;
+  createdAt: string;
 }
 
 export interface CmsContent {

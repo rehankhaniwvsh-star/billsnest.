@@ -305,6 +305,27 @@ export const VerifyPaymentSchema = z
   })
   .strict();
 
+export const SubmitRatingSchema = z
+  .object({
+    rating: z
+      .number()
+      .int("Rating must be a whole number between 1 and 5")
+      .min(1, "Please select at least 1 star")
+      .max(5, "Rating cannot exceed 5 stars"),
+    message: z
+      .string()
+      .trim()
+      .min(2, "Please enter a short message (at least 2 characters)")
+      .max(400, "Message cannot exceed 400 characters"),
+    authorName: z
+      .string()
+      .trim()
+      .max(80, "Name cannot exceed 80 characters")
+      .optional()
+      .default("Invobill User"),
+  })
+  .strict();
+
 export const EmailInvoiceSchema = z
   .object({
     recipient: z

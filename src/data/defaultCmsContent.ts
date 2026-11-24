@@ -8,6 +8,7 @@ export const defaultCmsContent: CmsContent = {
     accentColor: '#FFF0EB',
     backgroundColor: '#FBFBFA',
     contactEmail: 'hello@invobill.app',
+    instagramHandle: 'invobill.official',
     logoLetter: 'I',
     googleSiteVerification: 'googleacb1159f81828443',
     adminPin: '1234',

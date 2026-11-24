@@ -20,6 +20,7 @@ import {
   EmailInvoiceSchema,
   CreateOrderSchema,
   VerifyPaymentSchema,
+  SubmitRatingSchema,
 } from "./src/schemas/strictSchemas";
 
 async function startServer() {
@@ -128,6 +129,47 @@ async function startServer() {
       },
     });
   });
+
+  // Footer Customer Ratings & Message Bar Endpoints
+  const footerRatingsStore: Array<{
+    id: string;
+    rating: number;
+    message: string;
+    authorName: string;
+    createdAt: string;
+  }> = [];
+
+  app.get("/api/ratings", publicLimiter, (_req, res) => {
+    res.json({
+      success: true,
+      ratings: footerRatingsStore.slice(0, 50),
+    });
+  });
+
+  app.post(
+    "/api/ratings",
+    publicLimiter,
+    validateBody(SubmitRatingSchema),
+    (req, res) => {
+      const { rating, message, authorName } = req.body;
+      const entry = {
+        id: `rat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        rating,
+        message,
+        authorName: (authorName || "").trim() || "Invobill User",
+        createdAt: new Date().toISOString(),
+      };
+      footerRatingsStore.unshift(entry);
+      if (footerRatingsStore.length > 100) {
+        footerRatingsStore.length = 100;
+      }
+      res.status(201).json({
+        success: true,
+        entry,
+        ratings: footerRatingsStore.slice(0, 50),
+      });
+    }
+  );
 
   // Google Site Verification File handler for Google Search Console
   app.get("/googleacb1159f81828443.html", (req, res) => {
