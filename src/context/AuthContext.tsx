@@ -104,24 +104,33 @@ function buildAccountFromFirebaseUser(
   };
 }
 
-function formatFirebaseAuthError(err: any): Error {
+function formatFirebaseAuthError(err: any): Error & { code?: string } {
   const code = err?.code || '';
+  const createAuthError = (message: string): Error & { code?: string } => {
+    const wrapped = new Error(message) as Error & { code?: string };
+    wrapped.code = code;
+    return wrapped;
+  };
+
   if (code === 'auth/popup-closed-by-user') {
-    return new Error('Google sign-in window was closed before completing. Please try again.');
+    return createAuthError('Google sign-in window was closed before completing. Please try again.');
   }
   if (code === 'auth/cancelled-popup-request') {
-    return new Error('Another sign-in window was opened. Please complete the active Google prompt.');
+    return createAuthError('Another sign-in window was opened. Please complete the active Google prompt.');
   }
   if (code === 'auth/popup-blocked') {
-    return new Error('Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.');
+    return createAuthError('Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.');
   }
   if (code === 'auth/unauthorized-domain') {
-    return new Error('This domain is not yet authorized in Firebase Authentication settings.');
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+    return createAuthError(
+      `The domain "${host}" is not authorized in Firebase Authentication yet. Add it under Firebase Console → Authentication → Settings → Authorized domains.`
+    );
   }
   if (code === 'auth/network-request-failed') {
-    return new Error('Network error while connecting to Google. Please check your internet connection.');
+    return createAuthError('Network error while connecting to Google. Please check your internet connection.');
   }
-  return new Error(err?.message || 'Google authentication failed. Please try again.');
+  return createAuthError(err?.message || 'Google authentication failed. Please try again.');
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

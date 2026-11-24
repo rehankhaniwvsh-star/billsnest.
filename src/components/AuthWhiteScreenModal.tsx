@@ -14,8 +14,12 @@ import {
   FileText,
   QrCode,
   Cloud,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface AuthWhiteScreenModalProps {
   isOpen: boolean;
@@ -87,12 +91,19 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
   // UI feedback
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const currentHostname =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+  const firebaseAuthSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
 
   useEffect(() => {
     if (isOpen && !needsSignUpCompletion) {
       setActiveTab(authModalTab === 'signin' ? 'signin' : 'signup');
       setErrorMessage(null);
+      setErrorCode(null);
       setSuccessMessage(null);
       setAttemptedLoginAsNewUser(false);
     }
@@ -120,6 +131,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
   const handleGoogleContinue = async () => {
     setIsLoading(true);
     setErrorMessage(null);
+    setErrorCode(null);
     setSuccessMessage(null);
     setAttemptedLoginAsNewUser(false);
 
@@ -152,7 +164,19 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
       }, 450);
     } catch (err: any) {
       setIsLoading(false);
+      setErrorCode(err?.code || null);
       setErrorMessage(err?.message || 'Google authentication failed. Please try again.');
+    }
+  };
+
+  const handleCopyHostname = async () => {
+    if (!currentHostname) return;
+    try {
+      await navigator.clipboard.writeText(currentHostname);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2000);
+    } catch {
+      // Clipboard fallback not required
     }
   };
 
@@ -540,9 +564,41 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
 
                 {/* Feedback Alerts */}
                 {errorMessage && (
-                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{errorMessage}</span>
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-xs space-y-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{errorMessage}</span>
+                    </div>
+                    {errorCode === 'auth/unauthorized-domain' && currentHostname && (
+                      <div className="pl-6 flex flex-wrap items-center gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={handleCopyHostname}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-rose-200 dark:border-rose-800 text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          {copiedDomain ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span>Copied {currentHostname}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span className="font-mono">{currentHostname}</span>
+                            </>
+                          )}
+                        </button>
+                        <a
+                          href={firebaseAuthSettingsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-semibold hover:bg-rose-700 transition-colors"
+                        >
+                          <span>Open Firebase Auth Settings</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
 
