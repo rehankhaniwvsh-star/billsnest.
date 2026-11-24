@@ -114,6 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <img
                     src={currentUser.avatarUrl}
                     alt={currentUser.name}
+                    referrerPolicy="no-referrer"
                     className="w-6 h-6 rounded-full object-cover border border-zinc-200"
                   />
                 ) : (
@@ -191,7 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
                     >
                       <User className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Switch / Link Account</span>
+                      <span>Switch Google Account</span>
                     </button>
                   </div>
 
@@ -333,7 +334,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="p-3 bg-[var(--muted)]/50 rounded-xl border border-[var(--border)] space-y-2">
                 <div className="flex items-center gap-2.5">
                   {currentUser.avatarUrl ? (
-                    <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-8 h-8 rounded-full" />
+                    <img src={currentUser.avatarUrl} alt={currentUser.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full" />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-orange-600 text-white font-bold flex items-center justify-center text-xs">
                       {currentUser.name.charAt(0)}

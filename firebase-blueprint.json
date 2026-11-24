@@ -30,6 +30,15 @@
           "description": "Company, studio, or freelancing agency name",
           "maxLength": 120
         },
+        "role": {
+          "type": "string",
+          "description": "Profession or business role of the user",
+          "maxLength": 80
+        },
+        "onboardingCompleted": {
+          "type": "boolean",
+          "description": "Whether the new user has completed initial Google sign-up registration"
+        },
         "plan": {
           "type": "string",
           "description": "Active Invobill subscription tier",
@@ -234,6 +243,50 @@
         }
       },
       "required": ["userId", "invoiceNumber", "clientName", "status"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Public customer testimonial with star rating and feedback message displayed in TestimonialsSection",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who submitted the testimonial",
+          "maxLength": 128
+        },
+        "author": {
+          "type": "string",
+          "description": "Display name of the testimonial author",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "description": "Job title or role of the author",
+          "maxLength": 80
+        },
+        "company": {
+          "type": "string",
+          "description": "Company, studio, or agency name of the author",
+          "maxLength": 80
+        },
+        "quote": {
+          "type": "string",
+          "description": "Customer feedback message",
+          "minLength": 10,
+          "maxLength": 500
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Star rating from 1 to 5"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-assigned creation timestamp"
+        }
+      },
+      "required": ["userId", "author", "role", "company", "quote", "rating", "createdAt"]
     }
   },
   "firestore": {
@@ -248,6 +301,10 @@
     "/users/{userId}/payments/{paymentId}": {
       "schema": "SubscriptionPayment",
       "description": "Verified Razorpay subscription payment receipts owned by the user"
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "Testimonial",
+      "description": "Publicly readable customer testimonials submitted by verified authenticated users"
     }
   }
 }

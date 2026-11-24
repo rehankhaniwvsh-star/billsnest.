@@ -11,6 +11,11 @@ import {
   deleteDoc,
   collection,
   onSnapshot,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import {
   auth,
@@ -18,6 +23,7 @@ import {
 import {
   InvoiceData,
   SubscriptionPaymentRecord,
+  TestimonialItem,
   UserAccount,
 } from '../types';
 
@@ -34,6 +40,8 @@ export async function syncUserProfileToFirestore(user: UserAccount): Promise<voi
       displayName: user.name || '',
       photoURL: user.avatarUrl || '',
       companyName: user.companyName || '',
+      role: user.role || '',
+      onboardingCompleted: user.onboardingCompleted ?? false,
       plan: user.plan || 'free',
       billingCycle: user.billingCycle || 'monthly',
       subscriptionStatus: user.subscriptionStatus || 'active',
@@ -80,6 +88,8 @@ export async function fetchUserProfileFromFirestore(userId: string): Promise<Use
       createdAt: data.createdAt || new Date().toISOString(),
       lastLoginAt: data.lastLoginAt || new Date().toISOString(),
       companyName: data.companyName,
+      role: data.role || '',
+      onboardingCompleted: data.onboardingCompleted ?? true,
       plan: data.plan || 'free',
       billingCycle: data.billingCycle || 'monthly',
       subscriptionStatus: data.subscriptionStatus || 'active',
@@ -362,3 +372,122 @@ export async function fetchPreviousClientsFromFirestore(
     return [];
   }
 }
+
+export interface SubmitTestimonialInput {
+  author: string;
+  role?: string;
+  company?: string;
+  quote: string;
+  rating: number;
+}
+
+/**
+ * Submit a verified user testimonial to Firestore under /testimonials/{testimonialId}
+ */
+export async function submitTestimonialToFirestore(
+  input: SubmitTestimonialInput
+): Promise<TestimonialItem> {
+  const currentFbUser = auth.currentUser;
+  if (!currentFbUser) {
+    throw new Error('Please sign in with Google before publishing your testimonial.');
+  }
+
+  const author = input.author.trim().slice(0, 80);
+  const role = (input.role || '').trim().slice(0, 80);
+  const company = (input.company || '').trim().slice(0, 80);
+  const quote = input.quote.trim().slice(0, 500);
+  const rating = Math.min(5, Math.max(1, Math.round(input.rating)));
+
+  const testimonialId = `tst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const path = `testimonials/${testimonialId}`;
+
+  try {
+    const ref = doc(db, 'testimonials', testimonialId);
+    await setDoc(ref, {
+      userId: currentFbUser.uid,
+      author,
+      role,
+      company,
+      quote,
+      rating,
+      createdAt: serverTimestamp(),
+    });
+
+    return {
+      id: testimonialId,
+      userId: currentFbUser.uid,
+      author,
+      role,
+      company,
+      quote,
+      rating,
+      createdAt: new Date().toISOString(),
+      source: 'firestore',
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
+}
+
+/**
+ * Real-time subscription to public testimonials stored in Firestore
+ */
+export function subscribeToTestimonials(
+  onTestimonials: (testimonials: TestimonialItem[]) => void
+): () => void {
+  const path = 'testimonials';
+  try {
+    const q = query(
+      collection(db, 'testimonials'),
+      orderBy('createdAt', 'desc'),
+      limit(24)
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const list: TestimonialItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          let createdAtIso = '';
+          if (d.createdAt instanceof Timestamp) {
+            createdAtIso = d.createdAt.toDate().toISOString();
+          } else if (typeof d.createdAt === 'string') {
+            createdAtIso = d.createdAt;
+          }
+          list.push({
+            id: docSnap.id,
+            userId: typeof d.userId === 'string' ? d.userId : undefined,
+            author: typeof d.author === 'string' ? d.author : 'Invobill User',
+            role: typeof d.role === 'string' ? d.role : '',
+            company: typeof d.company === 'string' ? d.company : '',
+            quote: typeof d.quote === 'string' ? d.quote : '',
+            rating: typeof d.rating === 'number' ? d.rating : 5,
+            createdAt: createdAtIso,
+            source: 'firestore',
+          });
+        });
+        onTestimonials(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, path);
+      }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return () => {};
+  }
+}
+
+/**
+ * Allow an authenticated author to delete their own testimonial from Firestore
+ */
+export async function deleteTestimonialFromFirestore(testimonialId: string): Promise<void> {
+  const path = `testimonials/${testimonialId}`;
+  try {
+    await deleteDoc(doc(db, 'testimonials', testimonialId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+

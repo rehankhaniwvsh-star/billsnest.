@@ -7,6 +7,7 @@ import {
   InvoiceData,
   PlanCurrency,
   SubscriptionPlanId,
+  TestimonialItem,
 } from './types';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
@@ -17,6 +18,7 @@ import { AboutSection } from './components/AboutSection';
 import { HowItWorksSection } from './components/HowItWorksSection';
 import { FaqSection } from './components/FaqSection';
 import { TestimonialsSection } from './components/TestimonialsSection';
+import { AddTestimonialModal } from './components/AddTestimonialModal';
 import { CtaSection } from './components/CtaSection';
 import { Footer } from './components/Footer';
 import { InvoiceStudioView } from './components/InvoiceStudioView';
@@ -36,6 +38,8 @@ import {
   saveInvoiceToFirestore,
   deleteInvoiceFromFirestore,
   subscribeToUserInvoices,
+  subscribeToTestimonials,
+  deleteTestimonialFromFirestore,
 } from './services/firestoreService';
 import { downloadInvoicePdf } from './utils/pdfExport';
 import { calculateInvoiceMath } from './utils/invoiceCalculations';
@@ -48,7 +52,9 @@ function AppContent() {
   const {
     currentUser,
     planEntitlements,
+    isAuthReady,
     isAuthenticated,
+    needsSignUpCompletion,
     isAuthModalOpen,
     openAuthModal,
     closeAuthModal,
@@ -134,6 +140,8 @@ function AppContent() {
   const [checkoutCurrency, setCheckoutCurrency] = useState<PlanCurrency>('INR');
   const [invoiceCheckoutPayload, setInvoiceCheckoutPayload] =
     useState<InvoiceCheckoutPayload | null>(null);
+  const [addTestimonialModalOpen, setAddTestimonialModalOpen] = useState(false);
+  const [firestoreTestimonials, setFirestoreTestimonials] = useState<TestimonialItem[]>([]);
 
   // Admin authentication state
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
@@ -144,12 +152,17 @@ function AppContent() {
     }
   });
 
-  // Prompt login system on initial website visit if not already logged in
+  // Sync initial auth tab to signup when unauthenticated visitors arrive on /login or /signup
   useEffect(() => {
-    if (!isAuthenticated) {
-      openAuthModal('signin');
+    if (isAuthReady && !isAuthenticated && !needsSignUpCompletion) {
+      const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+      if (path === '/login' || window.location.hash === '#login') {
+        openAuthModal('signin');
+      } else {
+        openAuthModal('signup');
+      }
     }
-  }, []);
+  }, [isAuthReady, isAuthenticated, needsSignUpCompletion]);
 
   // Real-time Firestore synchronization for authenticated user's invoices
   useEffect(() => {
@@ -165,6 +178,30 @@ function AppContent() {
       return () => unsubscribe();
     }
   }, [currentUser?.id]);
+
+  // Real-time Firestore subscription for public customer testimonials
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = subscribeToTestimonials((remoteTestimonials) => {
+        setFirestoreTestimonials(remoteTestimonials);
+      });
+    } catch (err) {
+      console.warn('Firestore testimonials subscription error:', err);
+    }
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const handleDeleteFirestoreTestimonial = async (testimonialId: string) => {
+    try {
+      await deleteTestimonialFromFirestore(testimonialId);
+      setFirestoreTestimonials((prev) => prev.filter((item) => item.id !== testimonialId));
+    } catch (err) {
+      console.warn('Failed to delete testimonial:', err);
+    }
+  };
 
   // When auth succeeds, automatically open the Dashboard!
   const handleAuthSuccessRedirectDashboard = () => {
@@ -524,6 +561,41 @@ function AppContent() {
     invoices.find((i) => i.id === selectedInvoiceId || i.invoiceNumber === selectedInvoiceId) ||
     invoices[0];
 
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6 text-zinc-900">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-orange-500/20 animate-pulse">
+            {cms.brand?.logoLetter || 'I'}
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-bold tracking-tight text-zinc-900">
+              {cms.brand?.brandName || 'Invobill'}
+            </p>
+            <p className="text-xs font-medium text-zinc-500">
+              Checking your Google session...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mandatory Entry Gate: new users must sign up with Google first before entering the site
+  if (!isAuthenticated || needsSignUpCompletion) {
+    return (
+      <AuthWhiteScreenModal
+        isOpen={true}
+        required={true}
+        onClose={closeAuthModal}
+        onSuccessRedirectDashboard={handleAuthSuccessRedirectDashboard}
+        brandName={cms.brand?.brandName || 'Invobill'}
+        tagline={cms.brand?.tagline || 'Invoices, paid faster'}
+        logoLetter={cms.brand?.logoLetter || 'I'}
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen text-[var(--foreground)] bg-[var(--background)] selection:bg-[var(--accent)] selection:text-[var(--primary)]"
@@ -532,11 +604,6 @@ function AppContent() {
       <SplashEntranceAnimation
         brandName={cms.brand.brandName || 'Invobill'}
         tagline={cms.brand.tagline || 'Invoices, paid faster'}
-        onComplete={() => {
-          if (!isAuthenticated) {
-            openAuthModal('signin');
-          }
-        }}
       />
 
       {/* Universal Top Header Bar (Landing Mode) */}
@@ -623,7 +690,10 @@ function AppContent() {
 
           <TestimonialsSection
             testimonials={cms.testimonials}
+            firestoreTestimonials={firestoreTestimonials}
             primaryColor={cms.brand.primaryColor}
+            onOpenAddTestimonial={() => setAddTestimonialModalOpen(true)}
+            onDeleteTestimonial={handleDeleteFirestoreTestimonial}
           />
 
           <CtaSection
@@ -651,9 +721,10 @@ function AppContent() {
         </>
       )}
 
-      {/* Account Sign-In and Sign-Up System (White Screen View / Modal) */}
+      {/* Account Switcher Modal (Post-Authentication) */}
       <AuthWhiteScreenModal
         isOpen={isAuthModalOpen}
+        required={false}
         onClose={closeAuthModal}
         onSuccessRedirectDashboard={handleAuthSuccessRedirectDashboard}
         brandName={cms.brand?.brandName || 'Invobill'}
@@ -717,6 +788,18 @@ function AppContent() {
         onSuccess={handleAdminAuthSuccess}
         correctPin={cms.brand.adminPin || '1234'}
         brandName={cms.brand.brandName || 'Invobill'}
+      />
+
+      {/* Add Testimonial Modal (Firestore Backed) */}
+      <AddTestimonialModal
+        isOpen={addTestimonialModalOpen}
+        onClose={() => setAddTestimonialModalOpen(false)}
+        onSubmitted={(created) => {
+          setFirestoreTestimonials((prev) => [
+            created,
+            ...prev.filter((item) => item.id !== created.id),
+          ]);
+        }}
       />
 
       {/* Protected Live CMS Admin Modal */}

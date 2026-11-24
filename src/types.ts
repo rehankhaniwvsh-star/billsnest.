@@ -52,6 +52,9 @@ export interface TestimonialItem {
   avatarUrl?: string;
   quote: string;
   rating: number;
+  userId?: string;
+  createdAt?: string;
+  source?: 'firestore' | 'cms';
 }
 
 export interface BankDetails {

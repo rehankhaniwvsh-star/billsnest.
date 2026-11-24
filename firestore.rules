@@ -26,6 +26,8 @@ service cloud.firestore {
         && data.email is string && data.email.size() <= 256
         && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
         && (!('companyName' in data) || (data.companyName is string && data.companyName.size() <= 120))
+        && (!('role' in data) || (data.role is string && data.role.size() <= 80))
+        && (!('onboardingCompleted' in data) || data.onboardingCompleted is bool)
         && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000))
         && (!('plan' in data) || (data.plan is string && data.plan in ['free', 'pro', 'business']))
         && (!('billingCycle' in data) || (data.billingCycle is string && data.billingCycle in ['monthly', 'annual']))
@@ -52,6 +54,42 @@ service cloud.firestore {
         && data.billingCycle is string && data.billingCycle in ['monthly', 'annual']
         && (!('currency' in data) || (data.currency is string && data.currency in ['INR', 'USD']))
         && data.status is string && data.status == 'verified';
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['userId', 'author', 'role', 'company', 'quote', 'rating', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'author', 'role', 'company', 'quote', 'rating', 'createdAt'])
+        && data.userId is string && data.userId == request.auth.uid
+        && data.author is string && data.author.size() >= 2 && data.author.size() <= 80
+        && data.role is string && data.role.size() <= 80
+        && data.company is string && data.company.size() <= 80
+        && data.quote is string && data.quote.size() >= 10 && data.quote.size() <= 500
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && data.createdAt is timestamp;
+    }
+
+    // Public Testimonials Collection (zero PII; verified users can submit and manage their own)
+    match /testimonials/{testimonialId} {
+      allow get: if isValidId(testimonialId);
+      allow list: if request.query.limit != null && request.query.limit <= 50;
+      allow create: if isVerifiedUser()
+        && isValidId(testimonialId)
+        && isValidTestimonial(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(testimonialId)
+        && resource.data.userId == request.auth.uid
+        && isValidTestimonial(request.resource.data)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['author', 'role', 'company', 'quote', 'rating']);
+      allow delete: if isVerifiedUser()
+        && isValidId(testimonialId)
+        && resource.data.userId == request.auth.uid;
     }
 
     // User Profile Document

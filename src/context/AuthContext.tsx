@@ -29,9 +29,23 @@ interface UpgradePaymentInput {
   paymentId?: string;
 }
 
+export interface GoogleAuthResult {
+  account: UserAccount;
+  isNewUser: boolean;
+  needsProfileCompletion: boolean;
+}
+
+export interface CompleteSignUpInput {
+  name: string;
+  companyName: string;
+  role?: string;
+}
+
 interface AuthContextType {
   currentUser: UserAccount | null;
+  isAuthReady: boolean;
   isAuthenticated: boolean;
+  needsSignUpCompletion: boolean;
   isAuthModalOpen: boolean;
   authModalTab: 'signin' | 'signup';
   isFirebaseConnected: boolean;
@@ -39,6 +53,8 @@ interface AuthContextType {
   planEntitlements: PlanEntitlements;
   openAuthModal: (tab?: 'signin' | 'signup') => void;
   closeAuthModal: () => void;
+  authenticateWithGoogle: (mode: 'signup' | 'login') => Promise<GoogleAuthResult>;
+  completeGoogleSignUp: (input: CompleteSignUpInput) => Promise<UserAccount>;
   signInWithGoogle: (customEmail?: string, customName?: string) => Promise<UserAccount>;
   signInWithEmail: (email: string, password: string) => Promise<UserAccount>;
   signUpWithEmail: (
@@ -53,42 +69,60 @@ interface AuthContextType {
 }
 
 const LOCAL_STORAGE_USER_KEY = 'invobill_current_user_v1';
-const LOCAL_STORAGE_USERS_DB_KEY = 'invobill_registered_users_db_v1';
 
-// Seed default demo accounts
-const defaultUsersDb: UserAccount[] = [
-  {
-    id: 'user-google-uzafa',
-    email: 'uzafa.shop@gmail.com',
-    name: 'Uzafa Shop',
+function buildAccountFromFirebaseUser(
+  fbUser: FirebaseUser,
+  existingRemote: UserAccount | null
+): UserAccount {
+  const email = fbUser.email || existingRemote?.email || '';
+  const fallbackName = email ? email.split('@')[0] : 'Invobill User';
+  const name = existingRemote?.name || fbUser.displayName || fallbackName;
+  const now = new Date().toISOString();
+
+  return {
+    id: fbUser.uid,
+    email,
+    name,
     avatarUrl:
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80',
+      fbUser.photoURL ||
+      existingRemote?.avatarUrl ||
+      `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
     provider: 'google',
-    createdAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-    lastLoginAt: new Date().toISOString(),
-    companyName: 'Uzafa Commerce Studio',
-    plan: 'free',
-    billingCycle: 'monthly',
-    subscriptionStatus: 'active',
-    subscriptionCurrency: 'INR',
-  },
-  {
-    id: 'user-email-demo',
-    email: 'alex@invobill.app',
-    name: 'Alex Rivera',
-    avatarUrl:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=128&q=80',
-    provider: 'email',
-    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-    lastLoginAt: new Date().toISOString(),
-    companyName: 'Rivera Creative Ltd',
-    password: 'password123',
-    plan: 'free',
-    billingCycle: 'monthly',
-    subscriptionStatus: 'active',
-    subscriptionCurrency: 'INR',
-  },
-];
+    createdAt: existingRemote?.createdAt || fbUser.metadata.creationTime || now,
+    lastLoginAt: now,
+    companyName: existingRemote?.companyName || '',
+    role: existingRemote?.role || '',
+    onboardingCompleted: existingRemote ? existingRemote.onboardingCompleted !== false : false,
+    plan: existingRemote?.plan || 'free',
+    billingCycle: existingRemote?.billingCycle || 'monthly',
+    subscriptionStatus: existingRemote?.subscriptionStatus || 'active',
+    subscriptionCurrency: existingRemote?.subscriptionCurrency || 'INR',
+    subscriptionStartedAt: existingRemote?.subscriptionStartedAt,
+    subscriptionExpiresAt: existingRemote?.subscriptionExpiresAt,
+    lastPaymentId: existingRemote?.lastPaymentId,
+    lastOrderId: existingRemote?.lastOrderId,
+  };
+}
+
+function formatFirebaseAuthError(err: any): Error {
+  const code = err?.code || '';
+  if (code === 'auth/popup-closed-by-user') {
+    return new Error('Google sign-in window was closed before completing. Please try again.');
+  }
+  if (code === 'auth/cancelled-popup-request') {
+    return new Error('Another sign-in window was opened. Please complete the active Google prompt.');
+  }
+  if (code === 'auth/popup-blocked') {
+    return new Error('Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.');
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return new Error('This domain is not yet authorized in Firebase Authentication settings.');
+  }
+  if (code === 'auth/network-request-failed') {
+    return new Error('Network error while connecting to Google. Please check your internet connection.');
+  }
+  return new Error(err?.message || 'Google authentication failed. Please try again.');
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -96,44 +130,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
   children,
   onAuthSuccess,
 }) => {
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (err) {
-      console.warn('Failed to parse current user from storage:', err);
-    }
-    return null;
-  });
-
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signup');
   const [isFirebaseConnected] = useState(true);
-
-  const getUsersDb = (): UserAccount[] => {
-    try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_USERS_DB_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (err) {
-      console.warn('Failed to parse users DB:', err);
-    }
-    try {
-      localStorage.setItem(LOCAL_STORAGE_USERS_DB_KEY, JSON.stringify(defaultUsersDb));
-    } catch {}
-    return defaultUsersDb;
-  };
-
-  const saveUsersDb = (users: UserAccount[]) => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_USERS_DB_KEY, JSON.stringify(users));
-    } catch (err) {
-      console.error('Failed to save users DB:', err);
-    }
-  };
 
   const saveCurrentUser = (user: UserAccount | null) => {
     setCurrentUser(user);
@@ -148,50 +149,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     }
   };
 
-  // Subscribe to Firebase Auth state changes and preserve any remote subscription state
+  // Authoritative Firebase Auth listener — enforces real Google session state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
-      if (fbUser) {
-        const email = fbUser.email || 'uzafa.shop@gmail.com';
-        const name = fbUser.displayName || email.split('@')[0];
-        let existingRemote: UserAccount | null = null;
-        try {
-          existingRemote = await fetchUserProfileFromFirestore(fbUser.uid);
-        } catch {}
+      if (!fbUser) {
+        saveCurrentUser(null);
+        setIsAuthReady(true);
+        return;
+      }
 
-        const account: UserAccount = {
-          id: fbUser.uid,
-          email: email,
-          name: name,
-          avatarUrl:
-            fbUser.photoURL ||
-            `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-          provider: 'google',
-          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          companyName: existingRemote?.companyName || `${name} Studio`,
-          plan: existingRemote?.plan || currentUser?.plan || 'free',
-          billingCycle: existingRemote?.billingCycle || currentUser?.billingCycle || 'monthly',
-          subscriptionStatus: existingRemote?.subscriptionStatus || 'active',
-          subscriptionCurrency: existingRemote?.subscriptionCurrency || 'INR',
-          subscriptionStartedAt: existingRemote?.subscriptionStartedAt,
-          subscriptionExpiresAt: existingRemote?.subscriptionExpiresAt,
-          lastPaymentId: existingRemote?.lastPaymentId,
-          lastOrderId: existingRemote?.lastOrderId,
-        };
-        saveCurrentUser(account);
+      let existingRemote: UserAccount | null = null;
+      try {
+        existingRemote = await fetchUserProfileFromFirestore(fbUser.uid);
+      } catch (err) {
+        console.warn('Could not read Firestore user profile:', err);
+      }
+
+      const account = buildAccountFromFirebaseUser(fbUser, existingRemote);
+      saveCurrentUser(account);
+
+      if (existingRemote && account.onboardingCompleted) {
         try {
           await syncUserProfileToFirestore(account);
-        } catch (e) {
-          console.warn('Firestore user profile sync error:', e);
+        } catch (err) {
+          console.warn('Firestore login timestamp sync error:', err);
         }
       }
+
+      setIsAuthReady(true);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const openAuthModal = (tab: 'signin' | 'signup' = 'signin') => {
+  const openAuthModal = (tab: 'signin' | 'signup' = 'signup') => {
     setAuthModalTab(tab);
     setIsAuthModalOpen(true);
   };
@@ -200,219 +191,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     setIsAuthModalOpen(false);
   };
 
-  const signInWithGoogle = async (
-    customEmail?: string,
-    customName?: string
-  ): Promise<UserAccount> => {
+  const authenticateWithGoogle = async (
+    _mode: 'signup' | 'login'
+  ): Promise<GoogleAuthResult> => {
     try {
       const result = await signInWithPopup(auth, googleAuthProvider);
       const fbUser = result.user;
-      const email = fbUser.email || customEmail || 'uzafa.shop@gmail.com';
-      const name = fbUser.displayName || customName || email.split('@')[0];
 
       let existingRemote: UserAccount | null = null;
       try {
         existingRemote = await fetchUserProfileFromFirestore(fbUser.uid);
-      } catch {}
-
-      const account: UserAccount = {
-        id: fbUser.uid,
-        email: email,
-        name: name,
-        avatarUrl:
-          fbUser.photoURL ||
-          `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-        provider: 'google',
-        createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-        companyName: existingRemote?.companyName || `${name} Studio`,
-        plan: existingRemote?.plan || 'free',
-        billingCycle: existingRemote?.billingCycle || 'monthly',
-        subscriptionStatus: existingRemote?.subscriptionStatus || 'active',
-        subscriptionCurrency: existingRemote?.subscriptionCurrency || 'INR',
-        subscriptionStartedAt: existingRemote?.subscriptionStartedAt,
-        subscriptionExpiresAt: existingRemote?.subscriptionExpiresAt,
-        lastPaymentId: existingRemote?.lastPaymentId,
-        lastOrderId: existingRemote?.lastOrderId,
-      };
-
-      saveCurrentUser(account);
-      try {
-        await syncUserProfileToFirestore(account);
       } catch (err) {
-        console.warn('Could not sync user to Firestore:', err);
+        console.warn('Could not check existing Firestore profile:', err);
       }
 
-      setIsAuthModalOpen(false);
-      if (onAuthSuccess) onAuthSuccess();
-      return account;
-    } catch (firebaseErr: any) {
-      console.warn('Firebase signInWithPopup fallback or blocked:', firebaseErr?.message);
-      const targetEmail = customEmail || 'uzafa.shop@gmail.com';
-      const targetName =
-        customName ||
-        targetEmail
-          .split('@')[0]
-          .replace(/[._-]/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase());
-
-      const db = getUsersDb();
-      let account = db.find((u) => u.email.toLowerCase() === targetEmail.toLowerCase());
-      const now = new Date().toISOString();
-
-      if (!account) {
-        account = {
-          id: `google-${Date.now()}`,
-          email: targetEmail,
-          name: targetName,
-          avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-            targetName
-          )}&backgroundColor=ea4335,4285f4,34a853,fbbc05`,
-          provider: 'google',
-          createdAt: now,
-          lastLoginAt: now,
-          companyName: `${targetName} Studio`,
-          plan: 'free',
-          billingCycle: 'monthly',
-          subscriptionStatus: 'active',
-          subscriptionCurrency: 'INR',
-        };
-        saveUsersDb([account, ...db]);
-      } else {
-        account = {
-          ...account,
-          lastLoginAt: now,
-          plan: account.plan || 'free',
-        };
-        saveUsersDb(db.map((u) => (u.id === account!.id ? account! : u)));
-      }
+      const isNewUser = !existingRemote || existingRemote.onboardingCompleted === false;
+      const account = buildAccountFromFirebaseUser(fbUser, existingRemote);
 
       saveCurrentUser(account);
-      try {
-        await syncUserProfileToFirestore(account);
-      } catch (e) {
-        console.warn('Firestore fallback sync error:', e);
+
+      if (!isNewUser) {
+        try {
+          await syncUserProfileToFirestore(account);
+        } catch (err) {
+          console.warn('Could not sync returning user to Firestore:', err);
+        }
+        setIsAuthModalOpen(false);
+        if (onAuthSuccess) onAuthSuccess();
       }
 
-      setIsAuthModalOpen(false);
-      if (onAuthSuccess) onAuthSuccess();
-      return account;
+      return {
+        account,
+        isNewUser,
+        needsProfileCompletion: isNewUser,
+      };
+    } catch (firebaseErr: any) {
+      throw formatFirebaseAuthError(firebaseErr);
     }
   };
 
-  const signInWithEmail = async (email: string, password: string): Promise<UserAccount> => {
-    const cleanEmail = email.trim().toLowerCase();
-    const db = getUsersDb();
-    const account = db.find((u) => u.email.toLowerCase() === cleanEmail);
-
-    if (!account) {
-      const now = new Date().toISOString();
-      const generatedName = cleanEmail
-        .split('@')[0]
-        .replace(/[._-]/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      const newAcc: UserAccount = {
-        id: `email-${Date.now()}`,
-        email: cleanEmail,
-        name: generatedName,
-        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-          generatedName
-        )}&backgroundColor=FF5238,2563eb,10b981`,
-        provider: 'email',
-        createdAt: now,
-        lastLoginAt: now,
-        password: password,
-        companyName: `${generatedName} Invoicing`,
-        plan: 'free',
-        billingCycle: 'monthly',
-        subscriptionStatus: 'active',
-        subscriptionCurrency: 'INR',
-      };
-      saveUsersDb([newAcc, ...db]);
-      saveCurrentUser(newAcc);
-      try {
-        await syncUserProfileToFirestore(newAcc);
-      } catch {}
-      setIsAuthModalOpen(false);
-      if (onAuthSuccess) onAuthSuccess();
-      return newAcc;
-    }
-
-    if (account.password && account.password !== password) {
-      throw new Error('Incorrect password. Please verify your credentials or reset password.');
-    }
-
-    const updatedAccount: UserAccount = {
-      ...account,
-      lastLoginAt: new Date().toISOString(),
-      plan: account.plan || 'free',
-    };
-    saveUsersDb(db.map((u) => (u.id === updatedAccount.id ? updatedAccount : u)));
-    saveCurrentUser(updatedAccount);
-    try {
-      await syncUserProfileToFirestore(updatedAccount);
-    } catch {}
-    setIsAuthModalOpen(false);
-    if (onAuthSuccess) onAuthSuccess();
-    return updatedAccount;
-  };
-
-  const signUpWithEmail = async (
-    name: string,
-    email: string,
-    password: string,
-    companyName?: string
-  ): Promise<UserAccount> => {
-    const cleanEmail = email.trim().toLowerCase();
-    const db = getUsersDb();
-    const existing = db.find((u) => u.email.toLowerCase() === cleanEmail);
-
-    if (existing) {
-      const updated: UserAccount = {
-        ...existing,
-        name: name.trim() || existing.name,
-        companyName: companyName?.trim() || existing.companyName,
-        lastLoginAt: new Date().toISOString(),
-        plan: existing.plan || 'free',
-      };
-      saveUsersDb(db.map((u) => (u.id === updated.id ? updated : u)));
-      saveCurrentUser(updated);
-      try {
-        await syncUserProfileToFirestore(updated);
-      } catch {}
-      setIsAuthModalOpen(false);
-      if (onAuthSuccess) onAuthSuccess();
-      return updated;
+  const completeGoogleSignUp = async (input: CompleteSignUpInput): Promise<UserAccount> => {
+    const fbUser = auth.currentUser;
+    if (!fbUser) {
+      throw new Error('Please connect your Google account first to complete sign-up.');
     }
 
     const now = new Date().toISOString();
-    const cleanName = name.trim() || cleanEmail.split('@')[0];
-    const newAcc: UserAccount = {
-      id: `email-${Date.now()}`,
-      email: cleanEmail,
+    const cleanName = input.name.trim().slice(0, 120) || fbUser.displayName || 'Invobill User';
+    const cleanCompany = input.companyName.trim().slice(0, 120) || `${cleanName} Studio`;
+    const cleanRole = (input.role || '').trim().slice(0, 80);
+
+    const completedAccount: UserAccount = {
+      ...(currentUser || buildAccountFromFirebaseUser(fbUser, null)),
+      id: fbUser.uid,
+      email: fbUser.email || currentUser?.email || '',
       name: cleanName,
-      avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-        cleanName
-      )}&backgroundColor=FF5238,3b82f6,10b981`,
-      provider: 'email',
-      createdAt: now,
+      companyName: cleanCompany,
+      role: cleanRole,
+      avatarUrl:
+        fbUser.photoURL ||
+        currentUser?.avatarUrl ||
+        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}`,
+      provider: 'google',
+      onboardingCompleted: true,
+      plan: currentUser?.plan || 'free',
+      billingCycle: currentUser?.billingCycle || 'monthly',
+      subscriptionStatus: currentUser?.subscriptionStatus || 'active',
+      subscriptionCurrency: currentUser?.subscriptionCurrency || 'INR',
+      createdAt: currentUser?.createdAt || fbUser.metadata.creationTime || now,
       lastLoginAt: now,
-      companyName: companyName?.trim() || `${cleanName} Studio`,
-      password: password,
-      plan: 'free',
-      billingCycle: 'monthly',
-      subscriptionStatus: 'active',
-      subscriptionCurrency: 'INR',
     };
 
-    saveUsersDb([newAcc, ...db]);
-    saveCurrentUser(newAcc);
-    try {
-      await syncUserProfileToFirestore(newAcc);
-    } catch {}
+    await syncUserProfileToFirestore(completedAccount);
+    saveCurrentUser(completedAccount);
     setIsAuthModalOpen(false);
     if (onAuthSuccess) onAuthSuccess();
-    return newAcc;
+    return completedAccount;
+  };
+
+  const signInWithGoogle = async (): Promise<UserAccount> => {
+    const { account } = await authenticateWithGoogle('login');
+    return account;
+  };
+
+  const signInWithEmail = async (): Promise<UserAccount> => {
+    throw new Error('Please continue with Google Sign-In.');
+  };
+
+  const signUpWithEmail = async (): Promise<UserAccount> => {
+    throw new Error('Please sign up with Google.');
   };
 
   const signOut = async () => {
@@ -422,18 +289,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
       console.warn('Firebase signout error:', e);
     }
     saveCurrentUser(null);
-    openAuthModal('signin');
+    setAuthModalTab('signin');
+    setIsAuthModalOpen(true);
   };
 
   const updateUserProfile = async (updates: Partial<UserAccount>) => {
     if (!currentUser) return;
     const updated = { ...currentUser, ...updates };
     saveCurrentUser(updated);
-    const db = getUsersDb();
-    saveUsersDb(db.map((u) => (u.id === updated.id ? updated : u)));
-    try {
-      await syncUserProfileToFirestore(updated);
-    } catch {}
+    if (auth.currentUser && auth.currentUser.uid === updated.id) {
+      try {
+        await syncUserProfileToFirestore(updated);
+      } catch {}
+    }
   };
 
   const upgradePlan = async (input: UpgradePaymentInput) => {
@@ -442,42 +310,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     const expiresAt = new Date(now.getTime() + durationDays * 86400000).toISOString();
     const startedAt = now.toISOString();
 
-    const targetUser: UserAccount = currentUser
-      ? {
-          ...currentUser,
-          plan: input.planId,
-          billingCycle: input.billingCycle,
-          subscriptionStatus: 'active',
-          subscriptionCurrency: input.currency,
-          subscriptionStartedAt: startedAt,
-          subscriptionExpiresAt: expiresAt,
-          ...(input.paymentId ? { lastPaymentId: input.paymentId } : {}),
-          ...(input.orderId ? { lastOrderId: input.orderId } : {}),
-        }
-      : {
-          id: `guest-${Date.now()}`,
-          email: 'uzafa.shop@gmail.com',
-          name: 'Invobill Member',
-          createdAt: startedAt,
-          lastLoginAt: startedAt,
-          plan: input.planId,
-          billingCycle: input.billingCycle,
-          subscriptionStatus: 'active',
-          subscriptionCurrency: input.currency,
-          subscriptionStartedAt: startedAt,
-          subscriptionExpiresAt: expiresAt,
-          lastPaymentId: input.paymentId,
-          lastOrderId: input.orderId,
-        };
+    if (!currentUser) return;
+
+    const targetUser: UserAccount = {
+      ...currentUser,
+      plan: input.planId,
+      billingCycle: input.billingCycle,
+      subscriptionStatus: 'active',
+      subscriptionCurrency: input.currency,
+      subscriptionStartedAt: startedAt,
+      subscriptionExpiresAt: expiresAt,
+      ...(input.paymentId ? { lastPaymentId: input.paymentId } : {}),
+      ...(input.orderId ? { lastOrderId: input.orderId } : {}),
+    };
 
     saveCurrentUser(targetUser);
-    const dbList = getUsersDb();
-    const exists = dbList.some((u) => u.id === targetUser.id);
-    saveUsersDb(
-      exists
-        ? dbList.map((u) => (u.id === targetUser.id ? targetUser : u))
-        : [targetUser, ...dbList]
-    );
 
     if (auth.currentUser && auth.currentUser.uid === targetUser.id) {
       try {
@@ -501,6 +348,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     }
   };
 
+  const needsSignUpCompletion = Boolean(currentUser && currentUser.onboardingCompleted === false);
+  const isAuthenticated = Boolean(currentUser && currentUser.onboardingCompleted !== false);
   const currentPlan: SubscriptionPlanId = currentUser?.plan || 'free';
   const planEntitlements = getPlanEntitlements(currentPlan);
 
@@ -508,7 +357,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     <AuthContext.Provider
       value={{
         currentUser,
-        isAuthenticated: !!currentUser,
+        isAuthReady,
+        isAuthenticated,
+        needsSignUpCompletion,
         isAuthModalOpen,
         authModalTab,
         isFirebaseConnected,
@@ -516,6 +367,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
         planEntitlements,
         openAuthModal,
         closeAuthModal,
+        authenticateWithGoogle,
+        completeGoogleSignUp,
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
