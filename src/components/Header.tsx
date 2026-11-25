@@ -192,7 +192,7 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full px-3 py-2 text-left text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg flex items-center gap-2 cursor-pointer transition-colors"
                     >
                       <User className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Switch Google Account</span>
+                      <span>Switch Account</span>
                     </button>
                   </div>
 

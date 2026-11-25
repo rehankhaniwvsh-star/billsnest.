@@ -573,7 +573,7 @@ function AppContent() {
               {cms.brand?.brandName || 'Invobill'}
             </p>
             <p className="text-xs font-medium text-zinc-500">
-              Checking your Google session...
+              Checking your session...
             </p>
           </div>
         </div>

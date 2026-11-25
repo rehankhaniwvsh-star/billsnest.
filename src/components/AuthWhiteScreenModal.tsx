@@ -17,6 +17,10 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -74,6 +78,8 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
     authModalTab,
     authenticateWithGoogle,
     completeGoogleSignUp,
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
   } = useAuth();
 
@@ -83,21 +89,30 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
   );
   const [attemptedLoginAsNewUser, setAttemptedLoginAsNewUser] = useState(false);
 
-  // Step 2: New User Sign-Up Completion State
+  // Email & Password Form State (No OTP)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Shared / Step 2 Profile State
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [role, setRole] = useState('Freelancer');
 
   // UI feedback
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const isBusy = isLoadingGoogle || isLoadingEmail;
+
   const currentHostname =
     typeof window !== 'undefined' ? window.location.hostname : '';
   const firebaseAuthSettingsUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
+  const firebaseAuthProvidersUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`;
 
   useEffect(() => {
     if (isOpen && !needsSignUpCompletion) {
@@ -128,8 +143,16 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
 
   const isOnboardingStep = Boolean(currentUser && needsSignUpCompletion);
 
+  const finishAuthNavigation = () => {
+    if (!required) {
+      onSuccessRedirectDashboard();
+    } else {
+      onClose();
+    }
+  };
+
   const handleGoogleContinue = async () => {
-    setIsLoading(true);
+    setIsLoadingGoogle(true);
     setErrorMessage(null);
     setErrorCode(null);
     setSuccessMessage(null);
@@ -149,23 +172,86 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
           setAttemptedLoginAsNewUser(true);
         }
         setActiveTab('signup');
-        setIsLoading(false);
+        setIsLoadingGoogle(false);
         return;
       }
 
       setSuccessMessage(`Welcome back, ${result.account.name}! Entering ${brandName}...`);
       setTimeout(() => {
-        setIsLoading(false);
-        if (!required) {
-          onSuccessRedirectDashboard();
-        } else {
-          onClose();
-        }
-      }, 450);
+        setIsLoadingGoogle(false);
+        finishAuthNavigation();
+      }, 400);
     } catch (err: any) {
-      setIsLoading(false);
+      setIsLoadingGoogle(false);
       setErrorCode(err?.code || null);
       setErrorMessage(err?.message || 'Google authentication failed. Please try again.');
+    }
+  };
+
+  const handleEmailAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setErrorCode(null);
+    setSuccessMessage(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (activeTab === 'signup') {
+      const cleanName = fullName.trim();
+      const cleanCompany = companyName.trim();
+      if (cleanName.length < 2) {
+        setErrorMessage('Please enter your full name (at least 2 characters).');
+        return;
+      }
+      if (cleanCompany.length < 2) {
+        setErrorMessage('Please enter your business, brand, or studio name.');
+        return;
+      }
+
+      setIsLoadingEmail(true);
+      try {
+        const createdUser = await signUpWithEmail(
+          cleanName,
+          cleanEmail,
+          password,
+          cleanCompany,
+          role
+        );
+        setSuccessMessage(`Account created! Welcome to ${brandName}, ${createdUser.name}.`);
+        setTimeout(() => {
+          setIsLoadingEmail(false);
+          finishAuthNavigation();
+        }, 400);
+      } catch (err: any) {
+        setIsLoadingEmail(false);
+        setErrorCode(err?.code || null);
+        setErrorMessage(err?.message || 'Could not create your account. Please try again.');
+      }
+      return;
+    }
+
+    // Returning user Email Log In (No OTP)
+    setIsLoadingEmail(true);
+    try {
+      const signedInUser = await signInWithEmail(cleanEmail, password);
+      setSuccessMessage(`Welcome back, ${signedInUser.name}! Entering ${brandName}...`);
+      setTimeout(() => {
+        setIsLoadingEmail(false);
+        finishAuthNavigation();
+      }, 400);
+    } catch (err: any) {
+      setIsLoadingEmail(false);
+      setErrorCode(err?.code || null);
+      setErrorMessage(err?.message || 'Could not log in. Please check your email and password.');
     }
   };
 
@@ -183,6 +269,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
   const handleCompleteSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setErrorCode(null);
 
     const cleanName = fullName.trim();
     const cleanCompany = companyName.trim();
@@ -197,7 +284,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
       return;
     }
 
-    setIsLoading(true);
+    setIsLoadingEmail(true);
     try {
       const user = await completeGoogleSignUp({
         name: cleanName,
@@ -206,17 +293,18 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
       });
       setSuccessMessage(`Account created! Welcome to ${brandName}, ${user.name}.`);
       setTimeout(() => {
-        setIsLoading(false);
+        setIsLoadingEmail(false);
         onClose();
-      }, 450);
+      }, 400);
     } catch (err: any) {
-      setIsLoading(false);
+      setIsLoadingEmail(false);
       setErrorMessage(err?.message || 'Could not finish sign-up. Please try again.');
     }
   };
 
-  const handleSwitchGoogleAccount = async () => {
+  const handleSwitchAccount = async () => {
     setErrorMessage(null);
+    setErrorCode(null);
     setSuccessMessage(null);
     setAttemptedLoginAsNewUser(false);
     await signOut();
@@ -256,7 +344,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
           <div className="relative z-10 space-y-8 max-w-md">
             <div className="space-y-3">
               <p className="text-xs font-semibold text-orange-400">
-                Google-verified invoicing workspace
+                Instant invoicing workspace · No OTP needed
               </p>
               <h1 className="text-3xl xl:text-4xl font-extrabold tracking-tight leading-tight text-balance">
                 Sign up once, invoice clients in under two minutes.
@@ -292,7 +380,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                 <div>
                   <p className="text-sm font-semibold text-white">Private Firestore cloud sync</p>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Your invoices, saved clients, and subscription tier stay synced to your Google account.
+                    Your invoices, saved clients, and subscription tier stay synced across devices.
                   </p>
                 </div>
               </div>
@@ -300,11 +388,11 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
           </div>
 
           <div className="relative z-10 text-xs text-zinc-500">
-            © {new Date().getFullYear()} {brandName} · Secured with Google Authentication
+            © {new Date().getFullYear()} {brandName} · Secured with Firebase Authentication
           </div>
         </div>
 
-        {/* Right Panel: Mandatory Google Sign-Up / Log-In Gate */}
+        {/* Right Panel: Mandatory Sign-Up / Log-In Gate (Google + Email without OTP) */}
         <div className="bg-[var(--card)] text-[var(--foreground)] flex flex-col justify-between p-6 sm:p-10 lg:p-12 relative">
           {/* Top Mobile Brand + Optional Close when NOT required */}
           <div className="flex items-center justify-between gap-3">
@@ -333,10 +421,10 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
           </div>
 
           {/* Main Centered Auth Card Content */}
-          <div className="w-full max-w-md mx-auto my-auto py-8 space-y-6">
+          <div className="w-full max-w-md mx-auto my-auto py-6 space-y-5">
             {isOnboardingStep && currentUser ? (
-              /* STEP 2: New User Profile Completion (Mandatory before entering site) */
-              <div className="space-y-6">
+              /* STEP 2: New Google User Profile Completion (Mandatory before entering site) */
+              <div className="space-y-5">
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-[var(--primary)]">
                     Step 2 of 2 · Finish Sign Up
@@ -480,10 +568,10 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isBusy}
                     className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-sm transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-60"
                   >
-                    {isLoading ? (
+                    {isLoadingEmail ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Creating your workspace...</span>
@@ -500,18 +588,18 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                 <div className="pt-2 border-t border-[var(--border)] flex justify-center">
                   <button
                     type="button"
-                    onClick={handleSwitchGoogleAccount}
-                    disabled={isLoading}
+                    onClick={handleSwitchAccount}
+                    disabled={isBusy}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Use a different Google account</span>
+                    <span>Use a different account</span>
                   </button>
                 </div>
               </div>
             ) : (
-              /* STEP 1: Google Sign-Up (Default for New Users) & Returning Login */
-              <div className="space-y-6">
+              /* STEP 1: Sign-Up (Default for New Users) & Returning Login — Google + Email (No OTP) */
+              <div className="space-y-5">
                 <div className="space-y-1.5">
                   <h2
                     id="auth-portal-heading"
@@ -523,8 +611,8 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                   </h2>
                   <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
                     {activeTab === 'signup'
-                      ? 'New users are required to create an account with Google first before entering the workspace.'
-                      : 'Already registered? Log in with your Google account to open your saved invoices and clients.'}
+                      ? 'New users must sign up first with Google or Email (instant access, no OTP required).'
+                      : 'Welcome back! Log in with Google or your email & password to open your invoices.'}
                   </p>
                 </div>
 
@@ -535,6 +623,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                     onClick={() => {
                       setActiveTab('signup');
                       setErrorMessage(null);
+                      setErrorCode(null);
                       setSuccessMessage(null);
                     }}
                     className={`py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -550,6 +639,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                     onClick={() => {
                       setActiveTab('signin');
                       setErrorMessage(null);
+                      setErrorCode(null);
                       setSuccessMessage(null);
                     }}
                     className={`py-2 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -599,6 +689,19 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                         </a>
                       </div>
                     )}
+                    {errorCode === 'auth/operation-not-allowed' && (
+                      <div className="pl-6 pt-0.5">
+                        <a
+                          href={firebaseAuthProvidersUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-semibold hover:bg-rose-700 transition-colors"
+                        >
+                          <span>Enable Email/Password in Firebase Console</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -609,28 +712,183 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                   </div>
                 )}
 
-                {/* Primary Google Authentication CTA */}
-                <div className="space-y-3">
+                {/* Google Authentication Button */}
+                <button
+                  type="button"
+                  onClick={handleGoogleContinue}
+                  disabled={isBusy}
+                  className="w-full py-3 px-4 rounded-xl bg-[var(--background)] hover:bg-[var(--muted)] text-[var(--foreground)] border border-[var(--border)] font-bold text-sm transition-all shadow-xs flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                >
+                  {isLoadingGoogle ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Connecting to Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleGlyph className="w-4 h-4 shrink-0" />
+                      <span>
+                        {activeTab === 'signup'
+                          ? 'Continue with Google'
+                          : 'Log in with Google'}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {/* Divider */}
+                <div className="relative flex items-center py-0.5">
+                  <div className="flex-grow border-t border-[var(--border)]" />
+                  <span className="shrink-0 px-3 text-[11px] font-medium text-[var(--muted-foreground)]">
+                    or continue with email (no OTP)
+                  </span>
+                  <div className="flex-grow border-t border-[var(--border)]" />
+                </div>
+
+                {/* Email & Password Form (No OTP Required) */}
+                <form onSubmit={handleEmailAuthSubmit} className="space-y-3.5" noValidate>
+                  {activeTab === 'signup' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="email-signup-name"
+                          className="block text-xs font-semibold text-[var(--foreground)] mb-1"
+                        >
+                          Full Name <span className="text-[var(--primary)]">*</span>
+                        </label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            id="email-signup-name"
+                            type="text"
+                            autoComplete="name"
+                            value={fullName}
+                            onChange={(e) => {
+                              setFullName(e.target.value);
+                              if (errorMessage) setErrorMessage(null);
+                            }}
+                            placeholder="Your name"
+                            maxLength={120}
+                            required
+                            className="w-full pl-9 pr-3 py-2.5 text-sm bg-[var(--background)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/25 focus:border-[var(--primary)] transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="email-signup-company"
+                          className="block text-xs font-semibold text-[var(--foreground)] mb-1"
+                        >
+                          Business / Studio <span className="text-[var(--primary)]">*</span>
+                        </label>
+                        <div className="relative">
+                          <Building className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            id="email-signup-company"
+                            type="text"
+                            autoComplete="organization"
+                            value={companyName}
+                            onChange={(e) => {
+                              setCompanyName(e.target.value);
+                              if (errorMessage) setErrorMessage(null);
+                            }}
+                            placeholder="Studio name"
+                            maxLength={120}
+                            required
+                            className="w-full pl-9 pr-3 py-2.5 text-sm bg-[var(--background)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/25 focus:border-[var(--primary)] transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label
+                      htmlFor="auth-email"
+                      className="block text-xs font-semibold text-[var(--foreground)] mb-1"
+                    >
+                      Email Address <span className="text-[var(--primary)]">*</span>
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="auth-email"
+                        type="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (errorMessage) setErrorMessage(null);
+                        }}
+                        placeholder="you@example.com"
+                        maxLength={256}
+                        required
+                        className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-[var(--background)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/25 focus:border-[var(--primary)] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="auth-password"
+                      className="block text-xs font-semibold text-[var(--foreground)] mb-1"
+                    >
+                      Password <span className="text-[var(--primary)]">*</span>
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[var(--muted-foreground)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="auth-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete={activeTab === 'signup' ? 'new-password' : 'current-password'}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (errorMessage) setErrorMessage(null);
+                        }}
+                        placeholder={
+                          activeTab === 'signup'
+                            ? 'Create password (min. 6 characters)'
+                            : 'Enter your password'
+                        }
+                        minLength={6}
+                        required
+                        className="w-full pl-10 pr-10 py-2.5 text-sm bg-[var(--background)] border border-[var(--border)] rounded-xl text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/25 focus:border-[var(--primary)] transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
                   <button
-                    type="button"
-                    onClick={handleGoogleContinue}
-                    disabled={isLoading}
-                    className="w-full py-3.5 px-5 rounded-xl bg-[var(--foreground)] hover:opacity-90 text-[var(--background)] font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                    type="submit"
+                    disabled={isBusy}
+                    className="w-full py-3 px-4 rounded-xl bg-[var(--foreground)] hover:opacity-90 text-[var(--background)] font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 whitespace-nowrap"
                   >
-                    {isLoading ? (
+                    {isLoadingEmail ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Connecting to Google...</span>
+                        <span>
+                          {activeTab === 'signup' ? 'Creating account...' : 'Logging in...'}
+                        </span>
                       </>
                     ) : (
                       <>
-                        <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center shrink-0">
-                          <GoogleGlyph className="w-4 h-4" />
-                        </span>
                         <span>
                           {activeTab === 'signup'
-                            ? 'Sign up with Google'
-                            : 'Log in with Google'}
+                            ? `Create Account & Enter ${brandName}`
+                            : 'Log in with Email'}
                         </span>
                         <ArrowRight className="w-4 h-4" />
                       </>
@@ -639,13 +897,13 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
 
                   <p className="text-[11px] text-[var(--muted-foreground)] text-center leading-relaxed">
                     {activeTab === 'signup'
-                      ? 'Free Starter plan included · No credit card required'
-                      : 'New Google accounts will be guided to complete sign-up first'}
+                      ? 'Instant access without OTP · Free Starter plan included'
+                      : 'Log in directly with your email and password — no OTP needed'}
                   </p>
-                </div>
+                </form>
 
                 {/* Cross-switch prompt */}
-                <div className="pt-4 border-t border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
+                <div className="pt-3 border-t border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
                   {activeTab === 'signup' ? (
                     <>
                       Already have an account?{' '}
@@ -654,10 +912,11 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                         onClick={() => {
                           setActiveTab('signin');
                           setErrorMessage(null);
+                          setErrorCode(null);
                         }}
                         className="font-bold text-[var(--primary)] hover:underline cursor-pointer"
                       >
-                        Log in with Google
+                        Log in
                       </button>
                     </>
                   ) : (
@@ -668,6 +927,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
                         onClick={() => {
                           setActiveTab('signup');
                           setErrorMessage(null);
+                          setErrorCode(null);
                         }}
                         className="font-bold text-[var(--primary)] hover:underline cursor-pointer"
                       >
@@ -683,7 +943,7 @@ export const AuthWhiteScreenModal: React.FC<AuthWhiteScreenModalProps> = ({
           {/* Security Footer */}
           <div className="pt-4 border-t border-[var(--border)] flex items-center justify-center gap-2 text-[11px] text-[var(--muted-foreground)]">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Protected by Google OAuth &amp; Firebase Authentication</span>
+            <span>Protected by Firebase Authentication (Google &amp; Email)</span>
           </div>
         </div>
       </div>

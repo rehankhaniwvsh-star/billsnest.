@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   BillingCycle,
   PlanCurrency,
@@ -9,6 +9,9 @@ import {
   auth,
   googleAuthProvider,
   signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   fbSignOut,
   onAuthStateChanged,
   type FirebaseUser,
@@ -61,7 +64,8 @@ interface AuthContextType {
     name: string,
     email: string,
     password: string,
-    companyName?: string
+    companyName?: string,
+    role?: string
   ) => Promise<UserAccount>;
   signOut: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserAccount>) => Promise<void>;
@@ -69,6 +73,11 @@ interface AuthContextType {
 }
 
 const LOCAL_STORAGE_USER_KEY = 'invobill_current_user_v1';
+
+function detectProvider(fbUser: FirebaseUser): 'google' | 'email' {
+  const hasGoogle = fbUser.providerData?.some((p) => p.providerId === 'google.com');
+  return hasGoogle ? 'google' : 'email';
+}
 
 function buildAccountFromFirebaseUser(
   fbUser: FirebaseUser,
@@ -78,6 +87,13 @@ function buildAccountFromFirebaseUser(
   const fallbackName = email ? email.split('@')[0] : 'Invobill User';
   const name = existingRemote?.name || fbUser.displayName || fallbackName;
   const now = new Date().toISOString();
+  const provider = detectProvider(fbUser);
+
+  // Email/password sign-up already collects profile details in the sign-up form;
+  // brand-new Google users complete Step 2 onboarding first.
+  const onboardingCompleted = existingRemote
+    ? existingRemote.onboardingCompleted !== false
+    : provider === 'email';
 
   return {
     id: fbUser.uid,
@@ -87,12 +103,12 @@ function buildAccountFromFirebaseUser(
       fbUser.photoURL ||
       existingRemote?.avatarUrl ||
       `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-    provider: 'google',
+    provider,
     createdAt: existingRemote?.createdAt || fbUser.metadata.creationTime || now,
     lastLoginAt: now,
     companyName: existingRemote?.companyName || '',
     role: existingRemote?.role || '',
-    onboardingCompleted: existingRemote ? existingRemote.onboardingCompleted !== false : false,
+    onboardingCompleted,
     plan: existingRemote?.plan || 'free',
     billingCycle: existingRemote?.billingCycle || 'monthly',
     subscriptionStatus: existingRemote?.subscriptionStatus || 'active',
@@ -127,10 +143,38 @@ function formatFirebaseAuthError(err: any): Error & { code?: string } {
       `The domain "${host}" is not authorized in Firebase Authentication yet. Add it under Firebase Console → Authentication → Settings → Authorized domains.`
     );
   }
-  if (code === 'auth/network-request-failed') {
-    return createAuthError('Network error while connecting to Google. Please check your internet connection.');
+  if (code === 'auth/operation-not-allowed') {
+    return createAuthError(
+      'Email & Password sign-in is not enabled yet in Firebase Console. Enable it under Authentication → Sign-in method → Email/Password.'
+    );
   }
-  return createAuthError(err?.message || 'Google authentication failed. Please try again.');
+  if (code === 'auth/email-already-in-use') {
+    return createAuthError(
+      'An account with this email already exists. Switch to Log In to enter with your password.'
+    );
+  }
+  if (
+    code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' ||
+    code === 'auth/user-not-found'
+  ) {
+    return createAuthError(
+      'Invalid email or password. If you are a new user, please switch to Sign Up first.'
+    );
+  }
+  if (code === 'auth/invalid-email') {
+    return createAuthError('Please enter a valid email address.');
+  }
+  if (code === 'auth/weak-password') {
+    return createAuthError('Password is too weak. Please use at least 6 characters.');
+  }
+  if (code === 'auth/too-many-requests') {
+    return createAuthError('Too many attempts. Please wait a minute and try again.');
+  }
+  if (code === 'auth/network-request-failed') {
+    return createAuthError('Network error while connecting to authentication service. Please check your internet connection.');
+  }
+  return createAuthError(err?.message || 'Authentication failed. Please try again.');
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -144,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signup');
   const [isFirebaseConnected] = useState(true);
+  const emailSignUpInFlightRef = useRef(false);
 
   const saveCurrentUser = (user: UserAccount | null) => {
     setCurrentUser(user);
@@ -158,9 +203,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     }
   };
 
-  // Authoritative Firebase Auth listener — enforces real Google session state
+  // Authoritative Firebase Auth listener — tracks Google and Email/Password sessions
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
+      if (emailSignUpInFlightRef.current) {
+        return;
+      }
+
       if (!fbUser) {
         saveCurrentUser(null);
         setIsAuthReady(true);
@@ -261,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
         fbUser.photoURL ||
         currentUser?.avatarUrl ||
         `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}`,
-      provider: 'google',
+      provider: detectProvider(fbUser),
       onboardingCompleted: true,
       plan: currentUser?.plan || 'free',
       billingCycle: currentUser?.billingCycle || 'monthly',
@@ -283,12 +332,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; onAuthSuccess?:
     return account;
   };
 
-  const signInWithEmail = async (): Promise<UserAccount> => {
-    throw new Error('Please continue with Google Sign-In.');
+  const signInWithEmail = async (email: string, password: string): Promise<UserAccount> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      throw new Error('Please enter both your email address and password.');
+    }
+
+    try {
+      const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      const fbUser = credential.user;
+
+      let existingRemote: UserAccount | null = null;
+      try {
+        existingRemote = await fetchUserProfileFromFirestore(fbUser.uid);
+      } catch (err) {
+        console.warn('Could not read Firestore profile on email login:', err);
+      }
+
+      const account = buildAccountFromFirebaseUser(fbUser, existingRemote);
+      account.onboardingCompleted = true;
+
+      saveCurrentUser(account);
+
+      try {
+        await syncUserProfileToFirestore(account);
+      } catch (err) {
+        console.warn('Could not sync email login profile to Firestore:', err);
+      }
+
+      setIsAuthModalOpen(false);
+      if (onAuthSuccess) onAuthSuccess();
+      return account;
+    } catch (firebaseErr: any) {
+      throw formatFirebaseAuthError(firebaseErr);
+    }
   };
 
-  const signUpWithEmail = async (): Promise<UserAccount> => {
-    throw new Error('Please sign up with Google.');
+  const signUpWithEmail = async (
+    name: string,
+    email: string,
+    password: string,
+    companyName?: string,
+    role?: string
+  ): Promise<UserAccount> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim().slice(0, 120);
+    const cleanCompany = (companyName || '').trim().slice(0, 120);
+    const cleanRole = (role || '').trim().slice(0, 80);
+
+    if (cleanName.length < 2) {
+      throw new Error('Please enter your full name (at least 2 characters).');
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+
+    emailSignUpInFlightRef.current = true;
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      const fbUser = credential.user;
+
+      try {
+        await updateProfile(fbUser, { displayName: cleanName });
+      } catch (profileErr) {
+        console.warn('Could not update Firebase displayName:', profileErr);
+      }
+
+      const now = new Date().toISOString();
+      const newAccount: UserAccount = {
+        id: fbUser.uid,
+        email: cleanEmail,
+        name: cleanName,
+        companyName: cleanCompany || `${cleanName.split(' ')[0]} Studio`,
+        role: cleanRole,
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanName)}`,
+        provider: 'email',
+        onboardingCompleted: true,
+        plan: 'free',
+        billingCycle: 'monthly',
+        subscriptionStatus: 'active',
+        subscriptionCurrency: 'INR',
+        createdAt: fbUser.metadata.creationTime || now,
+        lastLoginAt: now,
+      };
+
+      try {
+        await syncUserProfileToFirestore(newAccount);
+      } catch (syncErr) {
+        console.warn('Could not sync newly created email user to Firestore:', syncErr);
+      }
+
+      saveCurrentUser(newAccount);
+      setIsAuthReady(true);
+      setIsAuthModalOpen(false);
+      if (onAuthSuccess) onAuthSuccess();
+      return newAccount;
+    } catch (firebaseErr: any) {
+      throw formatFirebaseAuthError(firebaseErr);
+    } finally {
+      emailSignUpInFlightRef.current = false;
+    }
   };
 
   const signOut = async () => {

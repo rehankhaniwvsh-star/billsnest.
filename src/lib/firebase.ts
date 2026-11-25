@@ -3,6 +3,9 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   signOut as fbSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -10,6 +13,9 @@ import {
 
 export {
   signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   fbSignOut,
   onAuthStateChanged,
   type FirebaseUser,

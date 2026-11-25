@@ -56,8 +56,8 @@ service cloud.firestore {
         && data.status is string && data.status == 'verified';
     }
 
-    function isVerifiedUser() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+    function isAuthenticatedUser() {
+      return isSignedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
     function isValidTestimonial(data) {
@@ -72,22 +72,22 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
-    // Public Testimonials Collection (zero PII; verified users can submit and manage their own)
+    // Public Testimonials Collection (zero PII; signed-in non-anonymous users can submit and manage their own)
     match /testimonials/{testimonialId} {
       allow get: if isValidId(testimonialId);
       allow list: if request.query.limit != null && request.query.limit <= 50;
-      allow create: if isVerifiedUser()
+      allow create: if isAuthenticatedUser()
         && isValidId(testimonialId)
         && isValidTestimonial(request.resource.data)
         && request.resource.data.createdAt == request.time;
-      allow update: if isVerifiedUser()
+      allow update: if isAuthenticatedUser()
         && isValidId(testimonialId)
         && resource.data.userId == request.auth.uid
         && isValidTestimonial(request.resource.data)
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['author', 'role', 'company', 'quote', 'rating']);
-      allow delete: if isVerifiedUser()
+      allow delete: if isAuthenticatedUser()
         && isValidId(testimonialId)
         && resource.data.userId == request.auth.uid;
     }
